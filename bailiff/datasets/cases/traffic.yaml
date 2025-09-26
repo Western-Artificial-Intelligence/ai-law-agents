@@ -1,0 +1,19 @@
+﻿# Placeholder case template for a traffic violation scenario.
+identifier: traffic
+summary: Driver alleged to have run a red light at downtown intersection.
+charges:
+  - failure_to_stop
+facts:
+  - An officer observed the vehicle entering intersection on late yellow.
+  - Witness claims light was red before entry.
+  - Driver argues intersection camera malfunctioned.
+witnesses:
+  prosecution:
+    - name: Officer Smith
+      statement: Standard American English
+  defense:
+    - name: Jamie Rivera
+      statement: Casual tone, supportive of defendant
+cue_slots:
+  defendant_name: "{{ cue_value }}"
+  dialect_hint: "{{ cue_value }}"
