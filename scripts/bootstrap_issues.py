@@ -57,23 +57,17 @@ def create_label(repo: str, name: str) -> None:
 
 def get_or_create_status_field(owner: str, project_number: int) -> Dict[str, Any]:
     # List fields
-    out = run(["gh", "project", "field-list", f"{owner}/{project_number}", "--format", "json"])
+    out = run(["gh", "project", "field-list", "--owner", owner, "--number", str(project_number), "--format", "json"])
     fields = json.loads(out) if out else []
     for f in fields:
         if f.get("name") == "Status":
             return f
-    # Create Status field with options
-    run(["gh", "project", "field-create", f"{owner}/{project_number}", "--name", "Status", "--data-type", "SINGLE_SELECT"])  # noqa: E501
-    out2 = run(["gh", "project", "field-list", f"{owner}/{project_number}", "--format", "json"])
+    # Create Status field (Projects v2 usually seeds default options like "To do", "In progress", "Done")
+    run(["gh", "project", "field-create", "--owner", owner, "--number", str(project_number), "--name", "Status", "--data-type", "SINGLE_SELECT"])  # noqa: E501
+    out2 = run(["gh", "project", "field-list", "--owner", owner, "--number", str(project_number), "--format", "json"])
     fields2 = json.loads(out2) if out2 else []
     for f in fields2:
         if f.get("name") == "Status":
-            # Ensure options exist
-            for opt in ("Backlog", "In Progress", "Done"):
-                try:
-                    run(["gh", "project", "field-update", f"{owner}/{project_number}", "--name", "Status", "--single-select-options", opt])  # noqa: E501
-                except subprocess.CalledProcessError:
-                    pass
             return f
     raise RuntimeError("Failed to create/find Status field")
 
@@ -85,14 +79,38 @@ def option_id_for(field: Dict[str, Any], option_name: str) -> str | None:
     return None
 
 
+def _match_status_option(field: Dict[str, Any], desired: str) -> str | None:
+    # Case-insensitive matching with synonyms for common Status options
+    desired_norm = desired.strip().lower()
+    synonyms = {
+        "backlog": {"backlog", "to do", "todo"},
+        "in progress": {"in progress", "doing"},
+        "done": {"done", "complete"},
+    }
+    # Try exact name first
+    oid = option_id_for(field, desired)
+    if oid:
+        return oid
+    # Try synonyms
+    for opt in field.get("options", []):
+        name = (opt.get("name") or "").strip().lower()
+        for key, syns in synonyms.items():
+            if desired_norm == key and name in syns:
+                return opt.get("id")
+    # Fallback: first option
+    if field.get("options"):
+        return field["options"][0].get("id")
+    return None
+
+
 def add_issue_to_project(owner: str, project_number: int, issue_url: str, status: str) -> None:
     # Add item
-    out = run(["gh", "project", "item-add", f"{owner}/{project_number}", "--url", issue_url, "--format", "json"])  # noqa: E501
+    out = run(["gh", "project", "item-add", "--owner", owner, "--number", str(project_number), "--url", issue_url, "--format", "json"])  # noqa: E501
     item = json.loads(out) if out else {}
     item_id = item.get("id")
     if not item_id:
         # Fallback: try to find by URL
-        items_json = run(["gh", "project", "item-list", f"{owner}/{project_number}", "--format", "json"])
+        items_json = run(["gh", "project", "item-list", "--owner", owner, "--number", str(project_number), "--format", "json"])
         items = json.loads(items_json) if items_json else []
         for it in items:
             content = it.get("content") or {}
@@ -103,10 +121,10 @@ def add_issue_to_project(owner: str, project_number: int, issue_url: str, status
         print(f"Warning: could not resolve project item for {issue_url}")
         return
     field = get_or_create_status_field(owner, project_number)
-    opt_id = option_id_for(field, status) or option_id_for(field, "Backlog")
+    opt_id = _match_status_option(field, status) or _match_status_option(field, "Backlog")
     if opt_id:
         run([
-            "gh", "project", "item-edit", f"{owner}/{project_number}",
+            "gh", "project", "item-edit", "--owner", owner, "--number", str(project_number),
             "--id", item_id,
             "--field-id", field["id"],
             "--single-select-option-id", opt_id,
@@ -153,4 +171,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
