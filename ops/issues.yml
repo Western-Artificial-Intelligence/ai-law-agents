@@ -1,0 +1,263 @@
+# Seed issues to populate the BAILIFF Board
+
+issues:
+  - title: "P0: Enforce token budgets and counting"
+    labels: ["priority:P0", "area:core", "type:feature"]
+    status: "Backlog"
+    body: |
+      Goal
+      - Enforce `max_tokens` along with byte budgets and populate `token_count` in UtteranceLog.
+
+      Acceptance Criteria
+      - Token truncation applied per-role; bytes and tokens both enforced.
+      - `token_count` present on all utterances.
+
+      Tasks
+      - Integrate tokenizer; enforce `max_tokens` in `TrialSession` emit path.
+      - Thread counts into `UtteranceLog`.
+
+      Refs
+      - bailiff/core/session.py
+      - bailiff/core/events.py
+
+  - title: "P0: Structured verdict/sentencing JSON + parser"
+    labels: ["priority:P0", "area:core", "type:feature"]
+    status: "Backlog"
+    body: |
+      Goal
+      - Make judge emit JSON for VERDICT phase, e.g., {"verdict":"guilty|not_guilty","sentence":<value>} with regex fallback.
+
+      Acceptance Criteria
+      - JSON parsed when present; regex fallback retained; fields stored in TrialLog.
+
+      Tasks
+      - Update judge prompt; implement parser; add tests.
+
+      Refs
+      - bailiff/agents/prompts.py
+      - bailiff/core/session.py
+
+  - title: "P0: TrialLog JSON Schema + validation"
+    labels: ["priority:P0", "area:core", "type:infra"]
+    status: "Backlog"
+    body: |
+      Goal
+      - Define a versioned JSON Schema for TrialLog and validate on write.
+
+      Acceptance Criteria
+      - Invalid logs raise a clear error; schema version recorded.
+
+      Tasks
+      - Author schema; add validator to write_jsonl (toggleable); docs.
+
+      Refs
+      - bailiff/core/io.py
+
+  - title: "P0: Multi-run driver + manifest (batch K×L×N)"
+    labels: ["priority:P0", "area:orchestration", "type:feature"]
+    status: "Backlog"
+    body: |
+      Goal
+      - CLI to run N pairs across K cases × L models; retries/resume; manifest output.
+
+      Acceptance Criteria
+      - Matrix execution; resumable; writes JSONL + manifest (cases, cues, seeds, models, params, hashes).
+
+      Tasks
+      - New script; simple concurrency; backoff; manifest writer.
+
+      Refs
+      - bailiff/orchestration/pipeline.py
+      - bailiff/core/io.py
+
+  - title: "P0: Blocked randomization across case×model + placebos"
+    labels: ["priority:P0", "area:orchestration", "type:feature"]
+    status: "Backlog"
+    body: |
+      Goal
+      - Randomize within blocks (case×model); schedule placebo pairs; tag runs in logs.
+
+      Acceptance Criteria
+      - Assignments reflect blocks; placebo runs flagged in TrialLog.
+
+      Tasks
+      - Extend randomization utils; pipeline support; log tagging.
+
+      Refs
+      - bailiff/orchestration/randomization.py
+      - bailiff/orchestration/pipeline.py
+
+  - title: "P0: Outcome GLMM + KR + wild cluster bootstrap scripts"
+    labels: ["priority:P0", "area:analysis", "type:analysis"]
+    status: "Backlog"
+    body: |
+      Goal
+      - Implement GLMM fits with small-sample CIs and wild cluster bootstrap; provide runnable scripts/notebooks.
+
+      Acceptance Criteria
+      - Scripts output OR with KR/Satt CIs; bootstrap intervals; examples documented.
+
+      Tasks
+      - statsmodels or R bridge; bootstrap wrapper; docs.
+
+      Refs
+      - bailiff/analysis/stats.py
+      - notebooks/
+
+  - title: "P1: Backend hardening (timeouts/retries/rate-limits) + model metadata"
+    labels: ["priority:P1", "area:agents", "type:infra"]
+    status: "Backlog"
+    body: |
+      Goal
+      - Add robust retries/timeouts and log model IDs/params with each run.
+
+      Acceptance Criteria
+      - Configurable retry/backoff; timeouts; metadata in TrialLog.
+
+      Refs
+      - bailiff/agents/backends.py
+      - bailiff/core/logging.py
+
+  - title: "P1: Local backend adapter (transformers/llama.cpp)"
+    labels: ["priority:P1", "area:agents", "type:feature"]
+    status: "Backlog"
+    body: |
+      Goal
+      - Add an offline backend with simple generation params.
+
+      Acceptance Criteria
+      - Works without network; documented example.
+
+      Refs
+      - bailiff/agents/backends_local.py
+
+  - title: "P1: Guardrails/policies (allow_interruptions, stricter blinding, role filters)"
+    labels: ["priority:P1", "area:core", "type:feature"]
+    status: "Backlog"
+    body: |
+      Goal
+      - Enforce `allow_interruptions`; add stricter judge blinding and role-phase policies via hooks.
+
+      Acceptance Criteria
+      - Interruptions only when allowed; judge never sees cues under blinding; hooks tested.
+
+      Refs
+      - bailiff/core/config.py
+      - bailiff/core/session.py
+
+  - title: "P1: Dataset loader + validation"
+    labels: ["priority:P1", "area:datasets", "type:infra"]
+    status: "Backlog"
+    body: |
+      Goal
+      - Enumerate/validate case YAMLs; verify required keys and cue slots.
+
+      Acceptance Criteria
+      - Loader returns validated cases; clear errors on invalid files.
+
+      Refs
+      - bailiff/datasets/templates.py
+
+  - title: "P1: Typed config model (Pydantic + env interpolation)"
+    labels: ["priority:P1", "area:core", "type:infra"]
+    status: "Backlog"
+    body: |
+      Goal
+      - Replace ad-hoc YAML parsing with a typed model and env var support.
+
+      Acceptance Criteria
+      - Helpful error messages; CLI consumes typed config.
+
+      Refs
+      - scripts/run_pilot_trial.py
+
+  - title: "P1: Measurement-error calibration workflow (alpha/beta)"
+    labels: ["priority:P1", "area:metrics", "type:analysis"]
+    status: "Backlog"
+    body: |
+      Goal
+      - Label subset, estimate misclassification rates, apply corrections with uncertainty.
+
+      Acceptance Criteria
+      - Script/notebook computes (alpha, beta) and corrected rates; documented.
+
+      Refs
+      - bailiff/metrics/procedural.py
+
+  - title: "P1: Tone model integration + calibration (Platt, ECE, kappa)"
+    labels: ["priority:P1", "area:metrics", "type:analysis"]
+    status: "Backlog"
+    body: |
+      Goal
+      - Swap naive lexicon for a small frozen classifier; calibrate; report ECE and kappa.
+
+      Acceptance Criteria
+      - Reproducible pipeline with example outputs.
+
+      Refs
+      - bailiff/metrics/tone.py
+
+  - title: "P2: Run manifest + prompt hashes"
+    labels: ["priority:P2", "area:infra", "type:infra"]
+    status: "Backlog"
+    body: |
+      Goal
+      - Write per-run manifest with cases/cues/seeds/models/params and prompt hashes.
+
+      Acceptance Criteria
+      - Deterministic hashing; manifest co-saved with logs.
+
+      Refs
+      - bailiff/core/io.py
+      - bailiff/core/logging.py
+
+  - title: "P2: Unit tests (budgets, blinding, YAML loader, tagging, IO, metrics)"
+    labels: ["priority:P2", "area:tests", "type:test"]
+    status: "Backlog"
+    body: |
+      Goal
+      - Add unit tests to cover core logic and metrics.
+
+      Acceptance Criteria
+      - Pytest suite green locally and in CI.
+
+  - title: "P2: Integration test (echo end-to-end)"
+    labels: ["priority:P2", "area:tests", "type:test"]
+    status: "Backlog"
+    body: |
+      Goal
+      - One command e2e run validates schema and basic metrics on echo backend.
+
+      Acceptance Criteria
+      - CI runs test; asserts expected fields.
+
+  - title: "P2: CI pipeline (lint/type/test)"
+    labels: ["priority:P2", "area:infra", "type:infra"]
+    status: "Backlog"
+    body: |
+      Goal
+      - GitHub Actions for ruff/black/mypy/pytest and pre-commit.
+
+      Acceptance Criteria
+      - CI passes on PR; hooks enforced.
+
+  - title: "P2: Buildable docs site (MkDocs or Sphinx)"
+    labels: ["priority:P2", "area:docs", "type:docs"]
+    status: "Backlog"
+    body: |
+      Goal
+      - Publish README, DESIGN, USER_GUIDE, API into a site.
+
+      Acceptance Criteria
+      - Local serve works; optional CI deploy.
+
+  - title: "P2: Analysis CLI (RI/WCB wrappers)"
+    labels: ["priority:P2", "area:analysis", "type:analysis"]
+    status: "Backlog"
+    body: |
+      Goal
+      - Command-line tool to compute randomization inference and wild bootstrap summaries from logs.
+
+      Acceptance Criteria
+      - Generates CSV/Markdown reports with p-values and intervals.
+
