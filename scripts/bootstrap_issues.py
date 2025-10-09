@@ -145,37 +145,56 @@ def main() -> None:
     parser.add_argument("--repo", required=True, help="OWNER/REPO, e.g., org/repo")
     parser.add_argument("--owner", help="Project owner (org or user) for Projects v2")
     parser.add_argument("--project-number", type=int, help="Project number for Projects v2")
+    parser.add_argument("--add-only", action="store_true", help="Only add existing issues (matching labels) to the project; skip creation")
     args = parser.parse_args()
 
     ensure_gh()
     issues = load_issues_spec()
 
-    # Ensure labels
-    labels = set(l for it in issues for l in it.get("labels", []))
-    for lb in sorted(labels):
-        create_label(args.repo, lb)
-
-    # Create issues
+    # Ensure labels and create issues unless add-only
     created: List[Dict[str, str]] = []
-    for it in issues:
-        title = it["title"]
-        body = it.get("body", "")
-        lbls = [l for l in it.get("labels", [])]
-        cmd = ["gh", "issue", "create", "--repo", args.repo, "--title", title]
-        if body:
-            cmd += ["--body", body]
-        for lb in lbls:
-            cmd += ["--label", lb]
-        out = run(cmd)
-        url = out.strip().splitlines()[-1]
-        created.append({"title": title, "url": url, "status": it.get("status", "Backlog")})
+    labels = set(l for it in issues for l in it.get("labels", []))
+    if not args.add_only:
+        for lb in sorted(labels):
+            create_label(args.repo, lb)
+        for it in issues:
+            title = it["title"]
+            body = it.get("body", "")
+            lbls = [l for l in it.get("labels", [])]
+            cmd = ["gh", "issue", "create", "--repo", args.repo, "--title", title]
+            if body:
+                cmd += ["--body", body]
+            for lb in lbls:
+                cmd += ["--label", lb]
+            out = run(cmd)
+            url = out.strip().splitlines()[-1]
+            created.append({"title": title, "url": url, "status": it.get("status", "Backlog")})
+    else:
+        # Collect existing issues in this repo that match any of the seed labels
+        # Use gh to fetch and filter in Python
+        j = run(["gh", "issue", "list", "--repo", args.repo, "--limit", "500", "--json", "url,labels,title"])
+        arr = json.loads(j)
+        label_names = {s.lower() for s in labels}
+        for it in arr:
+            names = {lab.get("name", "").lower() for lab in (it.get("labels") or [])}
+            if names & label_names:
+                # Default status Backlog; if the title matches a spec, carry over its status
+                status = "Backlog"
+                for spec in issues:
+                    if spec["title"].strip().lower() == (it.get("title") or "").strip().lower():
+                        status = spec.get("status", "Backlog")
+                        break
+                created.append({"title": it.get("title", ""), "url": it["url"], "status": status})
 
     # Optionally add to project
     if args.owner and args.project_number:
         for it in created:
             add_issue_to_project(args.owner, args.project_number, it["url"], it["status"]) 
 
-    print(f"Created {len(created)} issues.")
+    if args.add_only:
+        print(f"Added {len(created)} existing issues to project {args.project_number}.")
+    else:
+        print(f"Created {len(created)} issues and added to project {args.project_number}.")
 
 
 if __name__ == "__main__":
