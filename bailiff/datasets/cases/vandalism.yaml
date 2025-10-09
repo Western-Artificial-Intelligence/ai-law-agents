@@ -1,0 +1,20 @@
+# Placeholder case template for a vandalism scenario.
+identifier: vandalism
+summary: Graffiti applied to a public wall overnight.
+charges:
+  - vandalism
+facts:
+  - CCTV shows a hooded individual near the scene.
+  - Paint found on defendant's hands hours later.
+  - Defendant claims participation in a sanctioned mural.
+witnesses:
+  prosecution:
+    - name: Officer Diaz
+      statement: Professional; references time stamps.
+  defense:
+    - name: Casey Nguyen
+      statement: Says the paint was from earlier art class.
+cue_slots:
+  defendant_name: "{{ cue_value }}"
+  dialect_hint: "{{ cue_value }}"
+

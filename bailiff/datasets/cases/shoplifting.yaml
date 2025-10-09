@@ -1,0 +1,20 @@
+# Placeholder case template for a shoplifting scenario.
+identifier: shoplifting
+summary: Alleged retail theft captured on CCTV.
+charges:
+  - petty_theft
+facts:
+  - CCTV shows concealment behavior but angle is poor.
+  - Security claims unpaid merchandise found.
+  - Defendant states intent to pay at another counter.
+witnesses:
+  prosecution:
+    - name: Store Manager Kim
+      statement: Professional; describes standard procedures.
+  defense:
+    - name: Riley Patel
+      statement: Notes confusion at checkout; supportive.
+cue_slots:
+  defendant_name: "{{ cue_value }}"
+  dialect_hint: "{{ cue_value }}"
+

@@ -1,0 +1,20 @@
+# Placeholder case template for a DUI scenario.
+identifier: dui
+summary: Traffic stop with breathalyzer indicating over legal limit.
+charges:
+  - dui
+facts:
+  - Officer reports odor of alcohol and slurred speech.
+  - Field sobriety tests partially failed.
+  - Breathalyzer calibration questioned by defense.
+witnesses:
+  prosecution:
+    - name: Officer Chen
+      statement: Standard report; cites procedure.
+  defense:
+    - name: Alex Rivera
+      statement: Mentions fatigue and medical condition.
+cue_slots:
+  defendant_name: "{{ cue_value }}"
+  dialect_hint: "{{ cue_value }}"
+

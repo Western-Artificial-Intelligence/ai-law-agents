@@ -66,12 +66,25 @@ class TrialConfig:
     agent_budgets: Mapping[Role, AgentBudget]
     phase_budgets: Sequence[PhaseBudget]
     negative_controls: Sequence[CueToggle] = field(default_factory=tuple)
+    # Active cue assignment details (set by orchestration when pairing)
+    cue_condition: Optional[str] = None  # "control" | "treatment"
+    cue_value: Optional[str] = None
+    # Policy toggles
+    judge_blinding: bool = False
     notes: Optional[str] = None
 
     def budget_for(self, role: Role) -> AgentBudget:
         """Return the configured budget for a role."""
 
         return self.agent_budgets[role]
+
+    def phase_budget_for(self, phase: Phase) -> PhaseBudget:
+        """Return the PhaseBudget entry for a phase (defaults if missing)."""
+
+        for pb in self.phase_budgets:
+            if pb.phase == phase:
+                return pb
+        return PhaseBudget(phase=phase)
 
 
 DEFAULT_PHASE_ORDER: List[Phase] = [

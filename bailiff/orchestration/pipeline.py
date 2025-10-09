@@ -77,6 +77,9 @@ class TrialPipeline:
                 agent_budgets=base_config.agent_budgets,
                 phase_budgets=base_config.phase_budgets,
                 negative_controls=base_config.negative_controls,
+                cue_condition="control",
+                cue_value=assignment.control_value,
+                judge_blinding=base_config.judge_blinding,
                 notes=base_config.notes,
             )
             treatment_config = TrialConfig(
@@ -87,6 +90,9 @@ class TrialPipeline:
                 agent_budgets=base_config.agent_budgets,
                 phase_budgets=base_config.phase_budgets,
                 negative_controls=base_config.negative_controls,
+                cue_condition="treatment",
+                cue_value=assignment.treatment_value,
+                judge_blinding=base_config.judge_blinding,
                 notes=base_config.notes,
             )
             yield PairPlan(

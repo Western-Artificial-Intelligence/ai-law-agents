@@ -1,0 +1,16 @@
+# Local presentations/artifacts
+Presentation - Western AI.pdf
+
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db

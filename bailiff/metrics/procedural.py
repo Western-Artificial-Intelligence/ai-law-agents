@@ -52,6 +52,25 @@ def correct_measurement(mean_observed: float, alpha: float, beta: float) -> floa
     return (mean_observed - alpha) / denom
 
 
+def estimate_misclassification(y_true: Iterable[int], y_pred: Iterable[int]) -> Tuple[float, float]:
+    """Estimate (alpha, beta) where alpha=false positive rate, beta=false negative rate.
+
+    alpha = P(pred=1|true=0), beta = P(pred=0|true=1).
+    """
+
+    import numpy as np
+
+    yt = np.asarray(list(y_true), dtype=int)
+    yp = np.asarray(list(y_pred), dtype=int)
+    if yt.size != yp.size:
+        raise ValueError("y_true and y_pred must have the same length")
+    n0 = np.sum(yt == 0)
+    n1 = np.sum(yt == 1)
+    alpha = float(np.sum((yt == 0) & (yp == 1)) / n0) if n0 > 0 else 0.0
+    beta = float(np.sum((yt == 1) & (yp == 0)) / n1) if n1 > 0 else 0.0
+    return alpha, beta
+
+
 def summarize_objections(df: pd.DataFrame) -> pd.DataFrame:
     """Summarize objection outcomes by side and cue."""
 

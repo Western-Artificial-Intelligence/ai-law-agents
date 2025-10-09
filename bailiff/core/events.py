@@ -47,13 +47,16 @@ class TrialLog:
     trial_id: str
     case_identifier: str
     model_identifier: str
-    cue_assignment: str
+    cue_name: str
+    cue_condition: Optional[str]
+    cue_value: Optional[str]
     seed: int
     started_at: datetime
     completed_at: Optional[datetime]
     utterances: List[UtteranceLog] = field(default_factory=list)
     verdict: Optional[str] = None
     sentence: Optional[str] = None
+    schema_version: str = "0.1"
 
     def append(self, record: UtteranceLog) -> None:
         """Append an utterance record to the log."""

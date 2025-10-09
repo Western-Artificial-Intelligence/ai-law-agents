@@ -1,28 +1,42 @@
-﻿# B.A.I.L.I.F.F. Scaffold
+# B.A.I.L.I.F.F. — Bias Analysis in Interactive Legal Intelligence & Fairness Framework
 
-This repository hosts the early-stage implementation for **Bias Analysis in Interactive Legal Intelligence & Fairness Framework (B.A.I.L.I.F.F.)**. The focus of this scaffold is to provide well-documented entry points for:
+This repository implements a reproducible harness for auditing fairness in interactive, role‑governed legal mini‑trials powered by LLMs. It supports paired counterfactual trials, structured logs, and analysis‑ready metrics for both outcomes (e.g., conviction) and procedure (e.g., byte share, objections, interruptions, tone).
 
-- spinning up multi-agent legal role simulations with controllable demographic cues;
-- capturing structured event logs aligned with the paper's estimands;
-- preparing analysis-ready extracts for outcome and procedural bias metrics.
+## Features
+- Multi‑agent trial simulation with roles: judge, prosecution, defense
+- Paired cue toggling (control/treatment) with blocked randomization
+- Budgets/guards: per‑role byte caps, per‑phase message caps, judge blinding
+- Structured logs with event tags (objections, interruptions, safety)
+- Metrics: paired McNemar log‑odds, flip rate, byte share, measurement‑error correction, basic tone utilities
+- Extensible backends: Echo (offline), Groq, Gemini; open‑source adapters are easy to add
 
-## Layout
+## Quickstart
+1. Create a virtual environment and install:
+   - `python -m venv .venv && .venv\Scripts\activate` (Windows) or `source .venv/bin/activate`
+   - `pip install -e .[analysis,agent]`
+2. (Optional) Set API keys: `GROQ_API_KEY`, `GOOGLE_API_KEY`
+3. Run a pilot pair and write logs:
+   - Echo: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend echo --out trial_logs.jsonl`
+   - Groq: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend groq --model llama3-8b-8192 --out trial_logs.jsonl`
+   - Gemini: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend gemini --model gemini-1.5-flash --out trial_logs.jsonl`
 
-- `bailiff/core`: Simulation primitives (state machine, events, trial configuration).
-- `bailiff/agents`: Agent interface definitions and prompt scaffolds.
-- `bailiff/datasets`: Case templates, cue catalogs, negative control definitions.
-- `bailiff/metrics`: Outcome/procedural metric calculators and measurement corrections.
-- `bailiff/orchestration`: Pipelines for running paired trials, randomization, and logging.
-- `scripts/`: CLI entry points for generating trial plans and executing pilot runs.
+## Repository Layout
+- `bailiff/core`: State machine, config, logging, session engine, JSONL I/O
+- `bailiff/agents`: Agent abstractions, prompts, optional Groq/Gemini backends
+- `bailiff/datasets`: Case templates and cue catalogs
+- `bailiff/orchestration`: Randomization and pipelines for paired trials
+- `bailiff/metrics`: Outcome and procedural metrics/utilities
+- `bailiff/analysis`: Lightweight statistical helpers
+- `scripts/`: CLI entry points (pilot runner)
+- `docs/`: User guide and API reference
 
-Each module includes TODOs for expanding toward the full methodology in the manuscript.
+## Learn More
+- Design overview and diagrams: `DESIGN.md`
+- User guide (install, run, add case/cue/backend, analysis): `docs/USER_GUIDE.md`
+- API reference (core modules): `docs/API.md`
 
-## Getting Started
-
-1. `python -m venv .venv && .venv\Scripts\activate`
-2. `pip install -e .[analysis,agent]`
-3. Populate `config/` (to be added) with API credentials and byte budget policies.
-4. Run `python scripts/run_pilot_trial.py --config configs/pilot.yaml` after filling in placeholders.
-
-Refer to inline docstrings for details on the logging schema and estimand alignment.
+## FAQ
+- How do I add a new case? Create a YAML under `bailiff/datasets/cases/` with `summary`, `facts`, `witnesses`, and `cue_slots`. See the user guide.
+- How do I add a cue? Extend `cue_catalog()` in `bailiff/datasets/templates.py`.
+- How do I analyze results? Export JSONL from the runner and follow the analysis examples in `docs/USER_GUIDE.md`.
 

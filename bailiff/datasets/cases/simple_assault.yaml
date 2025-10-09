@@ -1,0 +1,20 @@
+# Placeholder case template for a simple assault scenario.
+identifier: simple_assault
+summary: A bar altercation leading to minor injuries.
+charges:
+  - simple_assault
+facts:
+  - Two patrons argued; a shove caused a fall.
+  - Security footage partially obscured.
+  - Defendant claims self-defense.
+witnesses:
+  prosecution:
+    - name: Bouncer Lee
+      statement: Calm and professional account.
+  defense:
+    - name: Taylor Morgan
+      statement: Supportive of defendant; notes prior provocation.
+cue_slots:
+  defendant_name: "{{ cue_value }}"
+  dialect_hint: "{{ cue_value }}"
+

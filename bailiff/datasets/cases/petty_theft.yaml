@@ -1,0 +1,20 @@
+# Placeholder case template for a petty theft scenario.
+identifier: petty_theft
+summary: Bicycle reported stolen from a public park.
+charges:
+  - petty_theft
+facts:
+  - Witness saw someone matching defendant's clothing near rack.
+  - Lock found broken; CCTV unavailable.
+  - Defendant claims mistaken identity.
+witnesses:
+  prosecution:
+    - name: Officer Patel
+      statement: Professional; summarizes witness account.
+  defense:
+    - name: Morgan Lee
+      statement: Provides alibi; supportive tone.
+cue_slots:
+  defendant_name: "{{ cue_value }}"
+  dialect_hint: "{{ cue_value }}"
+

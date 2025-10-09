@@ -25,7 +25,9 @@ dependencies = [
 [project.optional-dependencies]
 agent = [
   "openai>=1.40",
-  "anthropic>=0.34"
+  "anthropic>=0.34",
+  "groq>=0.9",
+  "google-generativeai>=0.7"
 ]
 analysis = [
   "matplotlib>=3.8",
