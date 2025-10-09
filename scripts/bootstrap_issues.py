@@ -32,7 +32,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def run(cmd: List[str], check: bool = True, capture: bool = True) -> str:
     res = subprocess.run(cmd, check=check, capture_output=capture, text=True)
-    return (res.stdout or "").strip()
+    out = (res.stdout or "").strip()
+    if res.returncode != 0:
+        err = (res.stderr or "").strip()
+        raise subprocess.CalledProcessError(res.returncode, cmd, output=out, stderr=err)
+    return out
 
 
 def ensure_gh() -> None:
@@ -57,14 +61,14 @@ def create_label(repo: str, name: str) -> None:
 
 def get_or_create_status_field(owner: str, project_number: int) -> Dict[str, Any]:
     # List fields
-    out = run(["gh", "project", "field-list", "--owner", owner, "--number", str(project_number), "--format", "json"])
+    out = run(["gh", "project", "field-list", str(project_number), "--owner", owner, "--format", "json"])
     fields = json.loads(out) if out else []
     for f in fields:
         if f.get("name") == "Status":
             return f
     # Create Status field (Projects v2 usually seeds default options like "To do", "In progress", "Done")
-    run(["gh", "project", "field-create", "--owner", owner, "--number", str(project_number), "--name", "Status", "--data-type", "SINGLE_SELECT"])  # noqa: E501
-    out2 = run(["gh", "project", "field-list", "--owner", owner, "--number", str(project_number), "--format", "json"])
+    run(["gh", "project", "field-create", str(project_number), "--owner", owner, "--name", "Status", "--data-type", "SINGLE_SELECT"])  # noqa: E501
+    out2 = run(["gh", "project", "field-list", str(project_number), "--owner", owner, "--format", "json"])
     fields2 = json.loads(out2) if out2 else []
     for f in fields2:
         if f.get("name") == "Status":
@@ -105,12 +109,12 @@ def _match_status_option(field: Dict[str, Any], desired: str) -> str | None:
 
 def add_issue_to_project(owner: str, project_number: int, issue_url: str, status: str) -> None:
     # Add item
-    out = run(["gh", "project", "item-add", "--owner", owner, "--number", str(project_number), "--url", issue_url, "--format", "json"])  # noqa: E501
+    out = run(["gh", "project", "item-add", str(project_number), "--owner", owner, "--url", issue_url, "--format", "json"])  # noqa: E501
     item = json.loads(out) if out else {}
     item_id = item.get("id")
     if not item_id:
         # Fallback: try to find by URL
-        items_json = run(["gh", "project", "item-list", "--owner", owner, "--number", str(project_number), "--format", "json"])
+        items_json = run(["gh", "project", "item-list", str(project_number), "--owner", owner, "--format", "json"])
         items = json.loads(items_json) if items_json else []
         for it in items:
             content = it.get("content") or {}
@@ -123,10 +127,15 @@ def add_issue_to_project(owner: str, project_number: int, issue_url: str, status
     field = get_or_create_status_field(owner, project_number)
     opt_id = _match_status_option(field, status) or _match_status_option(field, "Backlog")
     if opt_id:
+        # Need project node ID for item-edit
+        pjson = run(["gh", "project", "view", str(project_number), "--owner", owner, "--format", "json"])
+        proj = json.loads(pjson)
+        proj_id = proj.get("id")
         run([
-            "gh", "project", "item-edit", "--owner", owner, "--number", str(project_number),
+            "gh", "project", "item-edit",
             "--id", item_id,
             "--field-id", field["id"],
+            "--project-id", proj_id,
             "--single-select-option-id", opt_id,
         ])
 
