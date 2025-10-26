@@ -107,7 +107,7 @@ class TrialSession:
         # NEW: Enhanced judge blinding enforcement
         # Prevents demographic cue exposure to judges when blinding is enabled
         if self.config.judge_blinding and role is Role.JUDGE:
-            # Never show cue line to judge under blinding
+            # hides cue from judge
             cue_line = ""
             
             # NEW: Strict blinding mode - completely strip ALL cue-related content
@@ -115,7 +115,7 @@ class TrialSession:
             if self.config.strict_blinding:
                 # Remove all instances of cue values (control and treatment)
                 cv = self.config.cue_value or ""
-                if cv:
+                if cv:      #cue value exists
                     case_text = case_text.replace(cv, "[REDACTED]")
                 # Also redact the opposite condition value to prevent any leakage
                 if self.config.cue.control_value and self.config.cue.control_value != cv:
@@ -130,10 +130,10 @@ class TrialSession:
                 cv = self.config.cue_value or ""
                 if cv:
                     case_text = case_text.replace(cv, "[REDACTED]")
+        
+        # includes cue in prompt if role is not judge, or role is judge but judge is not blinded
         else:
-            # Non-judge roles see the cue information
-            if not (self.config.judge_blinding and role is Role.JUDGE):
-                cue_line = f"\nCue: {self.config.cue.name} = {self.config.cue_value}"
+            cue_line = f"\nCue: {self.config.cue.name} = {self.config.cue_value}"
         
         return (
             f"Case:\n{case_text}{cue_line}\n"
@@ -277,14 +277,16 @@ class TrialSession:
         
         # Check if any cue values appear in the text (case-insensitive)
         cv = self.config.cue_value or ""
-        if cv and cv.lower() in text.lower():
+
+        lowercaseText = text.lower()
+        if cv and cv.lower() in lowercaseText:
             return True
         
         # Under strict blinding, also check control/treatment values
         if self.config.strict_blinding:
-            if self.config.cue.control_value and self.config.cue.control_value.lower() in text.lower():
+            if self.config.cue.control_value and self.config.cue.control_value.lower() in lowercaseText:
                 return True
-            if self.config.cue.treatment_value and self.config.cue.treatment_value.lower() in text.lower():
+            if self.config.cue.treatment_value and self.config.cue.treatment_value.lower() in lowercaseText:
                 return True
         
         return False
