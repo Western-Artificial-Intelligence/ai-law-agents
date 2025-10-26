@@ -16,7 +16,7 @@ __pycache__/
 Thumbs.db
 
 #egg info
-bailliff.egg-info/
+bailiff.egg-info/
 
 #env
 .env
