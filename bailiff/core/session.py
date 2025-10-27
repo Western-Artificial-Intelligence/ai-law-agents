@@ -115,7 +115,7 @@ class TrialSession:
             if self.config.strict_blinding:
                 # Remove all instances of cue values (control and treatment)
                 cv = self.config.cue_value or ""
-                if cv:      #cue value exists
+                if cv:  # cue value exists
                     case_text = case_text.replace(cv, "[REDACTED]")
                 # Also redact the opposite condition value to prevent any leakage
                 if self.config.cue.control_value and self.config.cue.control_value != cv:
