@@ -73,7 +73,13 @@ def main() -> None:
         if cue_def is None:
             raise SystemExit(f"Unknown cue key in config: {cue_key}")
         cue = cue_def
-        case_path = Path(cfg.get("case_template", str(args.case or ""))).resolve()
+        case_template = cfg.get("case_template")
+        if case_template is not None:
+            case_path = Path(case_template).resolve()
+        elif args.case is not None:
+            case_path = args.case.resolve()
+        else:
+            raise SystemExit("No case template file specified in config or command line arguments.")
         model_id = cfg.get("model_identifier", args.model or "echo")
         seed = int(cfg.get("seed", args.seed))
         judge_blinding = bool(cfg.get("judge_blinding", False))
