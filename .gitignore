@@ -15,4 +15,8 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+#egg info
+bailiff.egg-info/
+
+#env
 .env
