@@ -29,11 +29,11 @@ jobs:
           python -m pip install -e .
           python -m pip install pytest
 
+      - name: Run pytest targeted test (optional verification)
+        run: |
+          pytest -q tests/test_e2e_echo.py::test_e2e_echo_smoke
+
       - name: Run e2e validator (script)
         run: |
           # Run the installed console script which returns non-zero on failure
           bailiff-e2e-echo
-
-      - name: Run pytest targeted test (optional verification)
-        run: |
-          pytest -q tests/test_e2e_echo.py::test_e2e_echo_smoke
