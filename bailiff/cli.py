@@ -24,9 +24,11 @@ from bailiff.core.logging import default_log_factory
 from bailiff.orchestration.pipeline import TrialPipeline
 from bailiff.orchestration.randomization import blocked_permutations
 
-# Reuse the lightweight EchoBackend defined in the scripts module. We import
-# dynamically to avoid introducing a direct package dependency cycle.
-from scripts.run_pilot_trial import EchoBackend
+class EchoBackend:
+    """Placeholder backend that echoes prompts for offline testing."""
+
+    def __call__(self, prompt: str, **_: object) -> str:
+        return f"[ECHO]\n{prompt}"
 
 
 def _repo_root() -> Path:
