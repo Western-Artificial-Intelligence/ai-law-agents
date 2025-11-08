@@ -20,3 +20,8 @@ bailiff.egg-info/
 
 #env
 .env
+
+# results and logs
+trial_logs*.*
+outcomes.csv
+bootstrap.json
