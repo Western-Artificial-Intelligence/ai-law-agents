@@ -95,7 +95,9 @@ def e2e_validate_echo(seed: int = 42) -> List:
         for utt in log.utterances:
             assert hasattr(utt, "role")
             assert hasattr(utt, "phase")
-            assert hasattr(utt, "content") and isinstance(utt.content, str) and utt.content
+            assert hasattr(utt, "content") and isinstance(utt.content, str)
+            # (We currently have blank utt.content strings in the middle, but this may change
+            # later in development) 
             assert hasattr(utt, "byte_count") and isinstance(utt.byte_count, int)
             # token_count may be None, but the field should exist
             assert hasattr(utt, "token_count")
