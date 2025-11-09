@@ -65,6 +65,8 @@ python scripts/outcome_wild_bootstrap.py outcomes.csv --reps 2000 --seed 123 --o
 - Statistic: McNemar log-odds on paired outcomes
 - Bootstrap: wild bootstrap with Rademacher signs at the pair level (design-based)
 - Outputs: estimate (log-odds), OR, ci_logit [p5,p95], ci_or [p5,p95]
+ - Seed: if `--seed` is omitted, defaults to `BAILIFF_ANALYSIS_SEED` or `ANALYSIS_SEED` env var (else 123)
+ - Continuity correction: applies Haldane–Anscombe when a discordant cell count is zero to keep a finite log-odds statistic
 
 ## Notes
 
