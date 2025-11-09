@@ -1,6 +1,7 @@
 """Session orchestration for multi-agent trials."""
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable, Dict, Iterable, Optional, Tuple
@@ -200,6 +201,7 @@ class TrialSession:
     _SUSTAIN_RE = re.compile(r"\b(sustain|sustained)\b", re.IGNORECASE)
     _OVERRULE_RE = re.compile(r"\b(overrule|overruled)\b", re.IGNORECASE)
     _INTERRUPT_RE = re.compile(r"\b(interrupt|interruption)\b", re.IGNORECASE)
+    _JSON_OBJECT_RE = re.compile(r"(\{.*?\})", re.DOTALL)
 
     def _apply_event_tagging(self, record: UtteranceLog) -> None:
         text = record.content
@@ -220,17 +222,12 @@ class TrialSession:
         judge_utts = [u for u in self._log.utterances if u.role is Role.JUDGE and u.phase is Phase.VERDICT]
         if not judge_utts:
             return
-        text = judge_utts[-1].content.lower()
-        verdict = None
-        if "not guilty" in text:
-            verdict = "not_guilty"
-        elif "guilty" in text:
-            verdict = "guilty"
-        self._log.verdict = verdict
-        # sentence extraction placeholder: looks for "sentence" and a number
-        m = re.search(r"sentence[^0-9]*([0-9]+)", text)
-        if m:
-            self._log.sentence = m.group(1)
+        text = judge_utts[-1].content
+        verdict, sentence = self._extract_verdict_fields(text)
+        if verdict:
+            self._log.verdict = verdict
+        if sentence is not None:
+            self._log.sentence = sentence
 
     def _validate_role_for_phase(self, role: Role, phase: Phase) -> None:
         """NEW: Validate that a role is authorized to speak in the given phase.
@@ -303,3 +300,75 @@ class TrialSession:
         """
         
         return self._policy_violations.copy()
+
+    @staticmethod
+    def _extract_verdict_fields(text: str) -> Tuple[Optional[str], Optional[str]]:
+        """Parse structured JSON if present, otherwise fall back to regex heuristics."""
+
+        verdict, sentence = TrialSession._parse_structured_verdict(text)
+        if verdict is not None or sentence is not None:
+            return verdict, sentence
+        return TrialSession._regex_verdict(text), TrialSession._regex_sentence(text)
+
+    @staticmethod
+    def _parse_structured_verdict(text: str) -> Tuple[Optional[str], Optional[str]]:
+        """Attempt to parse a JSON object containing verdict/sentence fields."""
+
+        for blob in TrialSession._json_candidates(text):
+            try:
+                data = json.loads(blob)
+            except json.JSONDecodeError:
+                continue
+            verdict = TrialSession._normalize_verdict(data.get("verdict"))
+            sentence_raw = data.get("sentence")
+            sentence = None
+            if sentence_raw is not None:
+                sentence = str(sentence_raw).strip()
+                if sentence == "":
+                    sentence = None
+            if verdict is not None or sentence is not None:
+                return verdict, sentence
+        return None, None
+
+    @staticmethod
+    def _json_candidates(text: str) -> Iterable[str]:
+        """Yield candidate JSON substrings from the judge response."""
+
+        stripped = text.strip()
+        seen = set()
+        if stripped.startswith("{") and stripped.endswith("}"):
+            seen.add(stripped)
+            yield stripped
+        for match in TrialSession._JSON_OBJECT_RE.finditer(text):
+            candidate = match.group(1).strip()
+            if candidate and candidate not in seen:
+                seen.add(candidate)
+                yield candidate
+
+    @staticmethod
+    def _normalize_verdict(value: object) -> Optional[str]:
+        """Normalize verdict strings onto expected enum-style labels."""
+
+        if not isinstance(value, str):
+            return None
+        normalized = value.strip().lower().replace(" ", "_")
+        valid = {"guilty", "not_guilty"}
+        return normalized if normalized in valid else None
+
+    @staticmethod
+    def _regex_verdict(text: str) -> Optional[str]:
+        """Fallback heuristic verdict parser using plain text."""
+
+        lowered = text.lower()
+        if "not guilty" in lowered:
+            return "not_guilty"
+        if "guilty" in lowered:
+            return "guilty"
+        return None
+
+    @staticmethod
+    def _regex_sentence(text: str) -> Optional[str]:
+        """Fallback heuristic for extracting a numeric sentence length."""
+
+        match = re.search(r"sentence[^0-9]*([0-9]+)", text, re.IGNORECASE)
+        return match.group(1) if match else None
