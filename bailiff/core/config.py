@@ -84,6 +84,8 @@ class TrialConfig:
     # Active cue assignment details (set by orchestration when pairing)
     cue_condition: Optional[str] = None  # "control" | "treatment"
     cue_value: Optional[str] = None
+    block_key: Optional[str] = None
+    is_placebo: bool = False
     # Policy toggles
     judge_blinding: bool = False
     # NEW: Enhanced blinding mode that redacts BOTH control and treatment cue values

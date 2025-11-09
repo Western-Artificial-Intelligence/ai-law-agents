@@ -25,3 +25,5 @@ phase_budgets:
     max_messages: 1
   - phase: audit
     max_messages: 1
+placebos:
+  - name_placebo

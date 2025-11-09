@@ -19,6 +19,8 @@ def default_log_factory(config: TrialConfig) -> TrialLog:
         cue_name=config.cue.name,
         cue_condition=config.cue_condition,
         cue_value=config.cue_value,
+        block_key=config.block_key,
+        is_placebo=config.is_placebo,
         seed=config.seed,
         started_at=started,
         completed_at=None,
