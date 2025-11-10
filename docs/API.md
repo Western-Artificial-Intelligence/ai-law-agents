@@ -23,7 +23,11 @@ This is a concise reference of the primary classes and functions. Import paths a
     - `.run() -> TrialLog` — executes phases, enforces budgets, tags events, parses verdict/sentence
 - `bailiff.core.io`
   - `write_jsonl(logs, path) -> None`
+  - `append_jsonl(logs, path) -> None`
   - `read_jsonl(path) -> list[dict]`
+  - `RunManifestEntry(...)`
+  - `RunManifest(path)`
+  - `compute_prompt_hash(*components) -> str`
 
 ## Orchestration
 - `bailiff.orchestration.randomization`
@@ -39,6 +43,7 @@ This is a concise reference of the primary classes and functions. Import paths a
     - `.build_session(config) -> TrialSession`
     - `.run_pair(plan) -> list[TrialLog]`
     - `.assign_pairs(base_config, assignments) -> Iterator[PairPlan]`
+    - `.assign_blocked_pairs(block_configs, assignments) -> Iterator[PairPlan]`
     - `.assign_blocked_pairs(block_configs, assignments) -> Iterator[PairPlan]`
 
 ## Agents
