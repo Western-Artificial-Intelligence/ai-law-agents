@@ -148,6 +148,7 @@ flowchart LR
 - Procedural Share: Phase‑level byte deltas aggregated by inverse‑variance weights (`aggregate_share`).
 - Objections: Side × cue sustain rates via `summarize_objections()`; downstream GLMMs left to analysis notebooks.
 - Measurement Error: Classical correction for binary rates (`correct_measurement(mean, alpha, beta)`) to debias regex/heuristic detectors.
+- Calibration Workflow: `measurement_error_calibration()` + `scripts/run_measurement_calibration.py` bootstrap alpha/beta estimates and corrected rates with uncertainty.
 - Randomization Inference/Bootstrap/KR: Implemented in analysis notebooks; logs retain case/model/seed identifiers for clustered resampling and design‑based permutations.
 
 ## Key File Map
