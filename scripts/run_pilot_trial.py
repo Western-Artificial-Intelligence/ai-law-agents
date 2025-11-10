@@ -13,7 +13,7 @@ import yaml
 from bailiff.agents.base import AgentSpec, RetryPolicy
 from bailiff.agents.prompts import prompt_for
 from bailiff.core.config import AgentBudget, CueToggle, PhaseBudget, Phase, Role, TrialConfig
-from bailiff.core.io import write_jsonl
+from bailiff.core.io import RunManifest, RunManifestEntry, compute_prompt_hash, write_jsonl
 from bailiff.core.logging import default_log_factory
 from bailiff.datasets.templates import cue_catalog
 from bailiff.orchestration.pipeline import TrialPipeline
@@ -36,6 +36,7 @@ class PilotConfig(BaseSettings):
     model: Optional[str] = Field(None, description="Model identifier for backend")
     out: Optional[Path] = Field(None, description="Optional JSONL output path")
     placebos: List[str] = Field(default_factory=list, description="Placebo cue keys to schedule")
+    manifest: Optional[Path] = Field(None, description="Optional manifest path to append run metadata")
     timeout_seconds: float = Field(30.0, description="Backend timeout in seconds")
     max_retries: int = Field(2, description="Maximum number of backend retries")
     backoff_seconds: float = Field(1.0, description="Initial backoff between retries")
@@ -64,6 +65,7 @@ def parse_args() -> dict[str, object]:
     parser.add_argument("--backend", choices=["echo", "groq", "gemini"], help="LLM backend to use")
     parser.add_argument("--model", help="Model identifier for backend")
     parser.add_argument("--out", type=Path, help="Optional JSONL output path")
+    parser.add_argument("--manifest", type=Path, help="Optional manifest JSONL path")
     parser.add_argument(
         "--placebo",
         action="append",
@@ -95,6 +97,30 @@ def parse_args() -> dict[str, object]:
             param_dict[key] = value
         parsed["backend_params"] = param_dict
     return parsed
+
+
+def _case_blob(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except Exception:
+        return path.name
+
+
+def _run_id(case_identifier: str, model_identifier: str, cue_name: str, seed: int, backend: str) -> str:
+    token = f"{case_identifier}|{model_identifier}|{cue_name}|{seed}|{backend}"
+    return compute_prompt_hash(token)
+
+
+def _prompt_hash_for_log(log) -> str:
+    return compute_prompt_hash(
+        log.trial_id,
+        log.case_identifier,
+        log.cue_name,
+        log.cue_value or "",
+        log.model_identifier,
+        log.backend_name or "",
+        log.cue_condition or "",
+    )
 
 def main() -> None:
     # Load configuration from environment variables and command line arguments
@@ -214,10 +240,40 @@ def main() -> None:
     cues_for_blocks: List[CueToggle] = [cue, *placebo_toggles]
     placebo_names = [toggle.name for toggle in placebo_toggles]
     block_defs = build_blocks(case_identifier, model_id, cues_for_blocks, seeds=[seed], placebo_names=placebo_names)
-    assignments = blockwise_permutations(block_defs)
-    logs = []
-    for pair_plan in pipeline.assign_pairs(base_config, assignments):
-        logs.extend(pipeline.run_pair(pair_plan))
+    logs: List = []
+    manifest = RunManifest(args.manifest) if args.manifest else None
+    case_blob = _case_blob(case_path)
+    for assignment in blockwise_permutations(block_defs):
+        plan_iter = pipeline.assign_pairs(base_config, [assignment])
+        pair_plan = next(plan_iter)
+        pair_logs = pipeline.run_pair(pair_plan)
+        logs.extend(pair_logs)
+        if manifest:
+            cue_name = assignment.cue_name or cue.name
+            run_id = _run_id(case_identifier, model_id, cue_name, assignment.seed, args.backend.value)
+            control_hash = _prompt_hash_for_log(pair_logs[0])
+            treatment_hash = _prompt_hash_for_log(pair_logs[1])
+            manifest.append(
+                RunManifestEntry(
+                    run_id=run_id,
+                    case_identifier=case_identifier,
+                    model_identifier=model_id,
+                    backend=args.backend.value,
+                    cue_name=cue_name,
+                    cue_control=assignment.control_value,
+                    cue_treatment=assignment.treatment_value,
+                    control_seed=assignment.seed,
+                    treatment_seed=assignment.seed + 1,
+                    block_key=assignment.block_key,
+                    is_placebo=assignment.is_placebo,
+                    prompt_hash=compute_prompt_hash(control_hash, treatment_hash, case_blob),
+                    prompt_hash_control=control_hash,
+                    prompt_hash_treatment=treatment_hash,
+                    params=param_snapshot,
+                    trial_ids=tuple(log.trial_id for log in pair_logs),
+                    log_path=str(args.out) if args.out else None,
+                )
+            )
     for log in logs:
         placebo_tag = " [placebo]" if log.is_placebo else ""
         print(f"Trial {log.trial_id}{placebo_tag} produced {len(log.utterances)} utterances")

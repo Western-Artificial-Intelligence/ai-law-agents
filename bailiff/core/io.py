@@ -37,6 +37,8 @@ class RunManifestEntry:
     block_key: Optional[str]
     is_placebo: bool
     prompt_hash: str
+    prompt_hash_control: Optional[str] = None
+    prompt_hash_treatment: Optional[str] = None
     params: Dict[str, object] = field(default_factory=dict)
     trial_ids: Sequence[str] = field(default_factory=tuple)
     log_path: Optional[str] = None
