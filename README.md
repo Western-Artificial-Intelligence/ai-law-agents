@@ -10,6 +10,7 @@ This repository implements a reproducible harness for auditing fairness in inter
 - Metrics: paired McNemar log‑odds, flip rate, byte share, measurement‑error correction, basic tone utilities
 - Extensible backends: Echo (offline), Groq, Gemini; open‑source adapters are easy to add
 - Batch driver with resumable manifests for running K×L×N matrices
+- Versioned JSON Schema validation for TrialLog output (toggle via `BAILIFF_VALIDATE_LOGS=0`)
 
 ## Quickstart
 1. Create a virtual environment and install:
@@ -28,6 +29,7 @@ This repository implements a reproducible harness for auditing fairness in inter
 - `bailiff/agents`: Agent abstractions, prompts, optional Groq/Gemini backends
 - `bailiff/datasets`: Case templates and cue catalogs
 - `bailiff/orchestration`: Randomization and pipelines for paired trials
+- `bailiff/schemas`: JSON Schemas (TrialLog) used for validation
 - `bailiff/metrics`: Outcome and procedural metrics/utilities
 - `bailiff/analysis`: Lightweight statistical helpers
 - `scripts/`: CLI entry points (pilot runner)

@@ -7,6 +7,7 @@ from enum import Enum
 from typing import List, Optional
 
 from .config import Phase, Role
+from .schema import SCHEMA_VERSION
 
 
 class ObjectionRuling(str, Enum):
@@ -58,7 +59,7 @@ class TrialLog:
     utterances: List[UtteranceLog] = field(default_factory=list)
     verdict: Optional[str] = None
     sentence: Optional[str] = None
-    schema_version: str = "0.1"
+    schema_version: str = SCHEMA_VERSION
 
     def append(self, record: UtteranceLog) -> None:
         """Append an utterance record to the log."""

@@ -2,12 +2,11 @@
 from __future__ import annotations
 
 import argparse
-import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, List, Optional
 
 import yaml
 
