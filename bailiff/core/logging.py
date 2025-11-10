@@ -16,6 +16,8 @@ def default_log_factory(config: TrialConfig) -> TrialLog:
         trial_id=f"{config.case_template.stem}-{config.cue.name}-{(config.cue_value or 'NA')}-{config.seed}",
         case_identifier=config.case_template.stem,
         model_identifier=config.model_identifier,
+        backend_name=config.backend_name,
+        model_parameters=dict(config.model_parameters),
         cue_name=config.cue.name,
         cue_condition=config.cue_condition,
         cue_value=config.cue_value,

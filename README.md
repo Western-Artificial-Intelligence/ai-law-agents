@@ -11,6 +11,7 @@ This repository implements a reproducible harness for auditing fairness in inter
 - Extensible backends: Echo (offline), Groq, Gemini; open‑source adapters are easy to add
 - Batch driver with resumable manifests for running K×L×N matrices
 - Versioned JSON Schema validation for TrialLog output (toggle via `BAILIFF_VALIDATE_LOGS=0`)
+- Configurable backend hardening (timeouts, retries, rate-limit sleeps) with metadata captured in logs
 
 ## Quickstart
 1. Create a virtual environment and install:

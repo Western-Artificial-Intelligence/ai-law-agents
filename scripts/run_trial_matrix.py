@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 
 import yaml
 
-from bailiff.agents.base import AgentSpec
+from bailiff.agents.base import AgentSpec, RetryPolicy
 from bailiff.agents.prompts import prompt_for
 from bailiff.core.config import AgentBudget, CueToggle, Phase, PhaseBudget, Role, TrialConfig
 from bailiff.core.io import RunManifest, RunManifestEntry, append_jsonl, compute_prompt_hash
@@ -30,6 +30,7 @@ class ModelSpec:
     backend: str
     model_identifier: str
     params: Dict[str, object]
+    retry_policy: RetryPolicy
 
 
 @dataclass
@@ -98,13 +99,36 @@ def build_phase_budgets(cfg: dict) -> List[PhaseBudget]:
 
 def build_model_specs(cfg: dict) -> List[ModelSpec]:
     models = []
+    default_policy = cfg.get("backend_policy", {}) or {}
     for entry in cfg.get("models", []):
         backend = entry.get("backend", "echo")
         model_identifier = entry.get("model") or backend
-        params = entry.get("params", {})
-        models.append(ModelSpec(backend=backend, model_identifier=model_identifier, params=params))
+        params = dict(entry.get("params", {}) or {})
+        policy_cfg = entry.get("backend_policy", default_policy) or {}
+        retry_policy = RetryPolicy(
+            max_retries=int(policy_cfg.get("max_retries", 2)),
+            initial_backoff=float(policy_cfg.get("backoff_seconds", 1.0)),
+            backoff_multiplier=float(policy_cfg.get("backoff_multiplier", 2.0)),
+            timeout_seconds=float(policy_cfg.get("timeout_seconds", 30.0)),
+            rate_limit_seconds=float(policy_cfg.get("rate_limit_seconds", 0.0)),
+        )
+        models.append(
+            ModelSpec(
+                backend=backend,
+                model_identifier=model_identifier,
+                params=params,
+                retry_policy=retry_policy,
+            )
+        )
     if not models:
-        models.append(ModelSpec(backend="echo", model_identifier="echo", params={}))
+        models.append(
+            ModelSpec(
+                backend="echo",
+                model_identifier="echo",
+                params={},
+                retry_policy=RetryPolicy(),
+            )
+        )
     return models
 
 
@@ -160,7 +184,13 @@ def load_backend(backend: str, model: str):
 def build_pipeline(model: ModelSpec) -> TrialPipeline:
     backend_impl = load_backend(model.backend, model.model_identifier)
     agents = {
-        role: AgentSpec(role=role, system_prompt=prompt_for(role), backend=backend_impl, default_params=model.params)
+        role: AgentSpec(
+            role=role,
+            system_prompt=prompt_for(role),
+            backend=backend_impl,
+            default_params=model.params,
+            retry_policy=model.retry_policy,
+        )
         for role in Role
     }
     return TrialPipeline(agents=agents, log_factory=default_log_factory)
@@ -193,6 +223,8 @@ def execute_job(
         case_template=job.case.template,
         cue=job.case.cue,
         model_identifier=job.model.model_identifier,
+        backend_name=job.model.backend,
+        model_parameters=dict(job.model.params),
         seed=job.seed,
         agent_budgets=budgets,
         phase_budgets=phase_budgets,

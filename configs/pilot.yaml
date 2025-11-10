@@ -25,5 +25,13 @@ phase_budgets:
     max_messages: 1
   - phase: audit
     max_messages: 1
+backend_policy:
+  timeout_seconds: 45
+  max_retries: 3
+  backoff_seconds: 1.0
+  backoff_multiplier: 2.0
+  rate_limit_seconds: 0.0
+backend_params:
+  temperature: 0.2
 placebos:
   - name_placebo

@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from .config import Phase, Role
 from .schema import SCHEMA_VERSION
@@ -48,6 +48,8 @@ class TrialLog:
     trial_id: str
     case_identifier: str
     model_identifier: str
+    backend_name: Optional[str] = None
+    model_parameters: Dict[str, object] = field(default_factory=dict)
     cue_name: str
     cue_condition: Optional[str]
     cue_value: Optional[str]

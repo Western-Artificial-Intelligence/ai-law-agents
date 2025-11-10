@@ -135,7 +135,7 @@ flowchart LR
 - Roles/Phases/State: `bailiff/core/config.py` defines `Role` (judge, prosecution, defense), `Phase` (opening → direct → cross → redirect → closing → verdict → audit), budgets, and `TrialConfig`.
 - Session Engine: `TrialSession` (core/session.py) advances phases, composes prompts, collects `UtteranceLog` records into a `TrialLog` using `default_log_factory`.
 - Randomization & Pairing: `RandomizationBlock` + `blockwise_permutations()` create `PairAssignment`s per case×model block (including placebos). `TrialPipeline.assign_pairs()` stamps cue metadata, block keys, and placebo flags before yielding `PairPlan`s.
-- Agents & Prompts: `AgentSpec` composes a role system prompt with shared context and calls a pluggable backend (Echo/LLM). Canonical role prompts live in `bailiff/agents/prompts.py`.
+- Agents & Prompts: `AgentSpec` composes a role system prompt with shared context and calls a pluggable backend (Echo/LLM) with configurable `RetryPolicy` (timeouts/backoff/rate limits). Canonical role prompts live in `bailiff/agents/prompts.py`.
 - Structured Logging: Each utterance captures role, phase, content bytes/tokens (token optional), flags for interruptions/objections/safety, timestamps, plus trial‑level metadata.
 - Batch Driver: `scripts/run_trial_matrix.py` enumerates case×model×seed matrices, streams JSONL logs, and records a resumable manifest with prompt hashes.
 - TrialLog Schema: `bailiff/schemas/trial_log.schema.json` (enforced by `bailiff/core/schema.py`) ensures logs are versioned and machine-validated on write.

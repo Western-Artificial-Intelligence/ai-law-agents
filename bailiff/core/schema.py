@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 from jsonschema import Draft202012Validator
 
-SCHEMA_VERSION = "0.2"
+SCHEMA_VERSION = "0.3"
 _SCHEMA_NAME = "trial_log.schema.json"
 
 

@@ -3,14 +3,14 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings
 import yaml
 
-from bailiff.agents.base import AgentSpec
+from bailiff.agents.base import AgentSpec, RetryPolicy
 from bailiff.agents.prompts import prompt_for
 from bailiff.core.config import AgentBudget, CueToggle, PhaseBudget, Phase, Role, TrialConfig
 from bailiff.core.io import write_jsonl
@@ -36,6 +36,12 @@ class PilotConfig(BaseSettings):
     model: Optional[str] = Field(None, description="Model identifier for backend")
     out: Optional[Path] = Field(None, description="Optional JSONL output path")
     placebos: List[str] = Field(default_factory=list, description="Placebo cue keys to schedule")
+    timeout_seconds: float = Field(30.0, description="Backend timeout in seconds")
+    max_retries: int = Field(2, description="Maximum number of backend retries")
+    backoff_seconds: float = Field(1.0, description="Initial backoff between retries")
+    backoff_multiplier: float = Field(2.0, description="Multiplicative backoff factor")
+    rate_limit_seconds: float = Field(0.0, description="Sleep between calls to respect rate limits")
+    backend_params: Dict[str, object] = Field(default_factory=dict, description="Backend parameter overrides")
 
     class Config:
         env_prefix = "BAILIFF_"  # Environment variables will be prefixed with BAILIFF_
@@ -65,14 +71,37 @@ def parse_args() -> dict[str, object]:
         default=[],
         help="Placebo cue key to schedule as a negative control (repeatable).",
     )
+    parser.add_argument("--timeout-seconds", type=float, help="Backend timeout in seconds")
+    parser.add_argument("--max-retries", type=int, help="Maximum backend retries")
+    parser.add_argument("--backoff-seconds", type=float, help="Initial retry backoff seconds")
+    parser.add_argument("--backoff-multiplier", type=float, help="Backoff multiplier per retry")
+    parser.add_argument("--rate-limit-seconds", type=float, help="Sleep between backend calls")
+    parser.add_argument(
+        "--backend-param",
+        action="append",
+        dest="backend_params",
+        default=[],
+        help="Backend parameter override in key=value form (repeatable).",
+    )
     args = parser.parse_args()
     # Convert to dict and remove None values
-    return {k: v for k, v in vars(args).items() if v is not None}
+    parsed = {k: v for k, v in vars(args).items() if v is not None}
+    if "backend_params" in parsed:
+        param_dict: Dict[str, object] = {}
+        for item in parsed.pop("backend_params"):
+            if "=" not in item:
+                raise SystemExit(f"Invalid --backend-param '{item}', expected key=value")
+            key, value = item.split("=", 1)
+            param_dict[key] = value
+        parsed["backend_params"] = param_dict
+    return parsed
 
 def main() -> None:
     # Load configuration from environment variables and command line arguments
     args = PilotConfig(**parse_args())
     placebo_keys: List[str] = list(args.placebos)
+    backend_params: Dict[str, object] = dict(args.backend_params)
+    policy_cfg: Dict[str, object] = {}
 
     # Load additional config from YAML file if specified
     if args.config:
@@ -93,6 +122,8 @@ def main() -> None:
         model_id = cfg.get("model_identifier") or args.model or args.backend.value
         seed = int(cfg.get("seed", args.seed))
         judge_blinding = bool(cfg.get("judge_blinding", False))
+        backend_params.update(cfg.get("backend_params", {}) or {})
+        policy_cfg = cfg.get("backend_policy", {}) or {}
         # Budgets
         budgets = {
             Role.JUDGE: AgentBudget(max_bytes=int(cfg.get("agent_budgets", {}).get("judge", {}).get("max_bytes", 1500))),
@@ -126,14 +157,25 @@ def main() -> None:
             Role.DEFENSE: AgentBudget(max_bytes=1800),
         }
         phase_budgets = [PhaseBudget(phase=phase) for phase in Phase]
+        policy_cfg = {}
     placebo_keys = list(dict.fromkeys(placebo_keys))
     placebo_toggles = resolve_placebos(placebo_keys)
     case_identifier = case_path.stem
     block_key = block_identifier(case_identifier, model_id)
+    retry_policy = RetryPolicy(
+        max_retries=int(policy_cfg.get("max_retries", args.max_retries)),
+        initial_backoff=float(policy_cfg.get("backoff_seconds", args.backoff_seconds)),
+        backoff_multiplier=float(policy_cfg.get("backoff_multiplier", args.backoff_multiplier)),
+        timeout_seconds=float(policy_cfg.get("timeout_seconds", args.timeout_seconds)),
+        rate_limit_seconds=float(policy_cfg.get("rate_limit_seconds", args.rate_limit_seconds)),
+    )
+    param_snapshot = dict(backend_params)
     base_config = TrialConfig(
         case_template=case_path,
         cue=cue,
         model_identifier=model_id,
+        backend_name=args.backend.value,
+        model_parameters=param_snapshot,
         seed=seed,
         agent_budgets=budgets,
         phase_budgets=phase_budgets,
@@ -159,7 +201,13 @@ def main() -> None:
         backend = GeminiBackend(model=model_id or "gemini-1.5-flash")
 
     agents = {
-        role: AgentSpec(role=role, system_prompt=prompt_for(role), backend=backend)
+        role: AgentSpec(
+            role=role,
+            system_prompt=prompt_for(role),
+            backend=backend,
+            default_params=param_snapshot,
+            retry_policy=retry_policy,
+        )
         for role in Role
     }
     pipeline = TrialPipeline(agents=agents, log_factory=default_log_factory)

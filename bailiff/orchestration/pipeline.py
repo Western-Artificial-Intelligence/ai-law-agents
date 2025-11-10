@@ -145,6 +145,8 @@ class TrialPipeline:
             case_template=base.case_template,
             cue=cue,
             model_identifier=base.model_identifier,
+            backend_name=base.backend_name,
+            model_parameters=base.model_parameters,
             seed=seed,
             agent_budgets=base.agent_budgets,
             phase_budgets=base.phase_budgets,
