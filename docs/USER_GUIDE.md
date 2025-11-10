@@ -105,6 +105,13 @@ witnesses:
 cue_slots:
   defendant_name: "{{ cue_value }}"
 ```
+- Validate catalog entries programmatically:
+```python
+from pathlib import Path
+from bailiff.datasets import load_case_templates
+
+load_case_templates(Path("bailiff/datasets/cases"))
+```
 
 ## Add a cue
 Edit `bailiff/datasets/templates.py` → `cue_catalog()` and add a `CueToggle` with `control_value`/`treatment_value`. Use the key in your config.
