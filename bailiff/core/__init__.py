@@ -10,6 +10,7 @@
 from .events import EventTag, ObjectionRuling, TrialLog, UtteranceLog
 from .logging import LogFactory, default_log_factory, mark_completed
 from .session import TrialSession
+from .tokenizer import Tokenizer
 
 __all__ = [
     "AgentBudget",
@@ -25,6 +26,7 @@ __all__ = [
     "TrialLog",
     "TrialSession",
     "UtteranceLog",
+    "Tokenizer",
     "default_log_factory",
     "mark_completed",
 ]
