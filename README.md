@@ -7,7 +7,7 @@ This repository implements a reproducible harness for auditing fairness in inter
 - Paired cue toggling (control/treatment) with blocked randomization
 - Budgets/guards: per‑role byte caps, per‑phase message caps, judge blinding
 - Structured logs with event tags (objections, interruptions, safety)
-- Metrics: paired McNemar log‑odds, flip rate, byte share, measurement‑error correction, basic tone utilities
+- Metrics: paired McNemar log-odds, flip rate, byte share, measurement-error correction, frozen tone classifier with calibration (Platt, ECE, κ)
 - Extensible backends: Echo (offline), Groq, Gemini; open‑source adapters are easy to add
 
 ## Quickstart
@@ -19,6 +19,7 @@ This repository implements a reproducible harness for auditing fairness in inter
    - Echo: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend echo --out trial_logs.jsonl`
    - Groq: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend groq --model llama3-8b-8192 --out trial_logs.jsonl`
    - Gemini: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend gemini --model gemini-1.5-flash --out trial_logs.jsonl`
+4. Calibrate and inspect the frozen tone classifier: `python scripts/run_tone_calibration.py`
 
 ## Repository Layout
 - `bailiff/core`: State machine, config, logging, session engine, JSONL I/O
@@ -27,7 +28,7 @@ This repository implements a reproducible harness for auditing fairness in inter
 - `bailiff/orchestration`: Randomization and pipelines for paired trials
 - `bailiff/metrics`: Outcome and procedural metrics/utilities
 - `bailiff/analysis`: Lightweight statistical helpers
-- `scripts/`: CLI entry points (pilot runner)
+- `scripts/`: CLI entry points (pilot runner, tone calibration report)
 - `docs/`: User guide and API reference
 
 ## Learn More
