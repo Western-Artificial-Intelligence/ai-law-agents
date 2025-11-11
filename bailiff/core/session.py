@@ -3,12 +3,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Callable, Dict, Iterable, Optional
+from typing import Callable, Dict, Iterable, Optional, Tuple
 
 from .config import DEFAULT_PHASE_ORDER, Phase, PolicyViolation, Role, TrialConfig
 from .events import TrialLog, UtteranceLog
 from .logging import mark_completed
-from .tokenizer import Tokenizer
 from pathlib import Path
 import re
 import yaml
@@ -24,10 +23,8 @@ class TrialSession:
     responders: Dict[Role, AgentResponder]
     log_factory: Callable[[TrialConfig], TrialLog]
     policy_hooks: Optional[Dict[str, Callable[[TrialLog], None]]] = None
-    tokenizer: Tokenizer = field(default_factory=Tokenizer)
     _log: Optional[TrialLog] = field(default=None, init=False, repr=False)
     _bytes_used: Dict[Role, int] = field(default_factory=dict, init=False, repr=False)
-    _tokens_used: Dict[Role, int] = field(default_factory=dict, init=False, repr=False)
     _case_text: Optional[str] = field(default=None, init=False, repr=False)
     # NEW: Tracks count of each type of policy violation during trial execution
     # Format: {"interruption_not_allowed": 2, "judge_cue_exposure": 1}
@@ -38,7 +35,6 @@ class TrialSession:
 
         self._log = self.log_factory(self.config)
         self._bytes_used = {role: 0 for role in Role}
-        self._tokens_used = {role: 0 for role in Role}
         self._case_text = self._load_and_render_case()
         for phase in DEFAULT_PHASE_ORDER:
             self._run_phase(phase)
@@ -62,12 +58,9 @@ class TrialSession:
             max_msgs = max(1, pb.max_messages)
             for _ in range(max_msgs):
                 content = self._emit(role, phase)
-                # Enforce token and byte budgets via truncation
-                content = self._apply_token_budget(role, content)
+                # Enforce byte budget per role by truncation
                 content = self._apply_byte_budget(role, content)
-                token_count = self.tokenizer.count(content)
-                self._consume_tokens(role, token_count)
-                record = self._build_record(role, phase, content, token_count)
+                record = self._build_record(role, phase, content)
                 self._apply_event_tagging(record)
                 
                 # NEW: Enforce interruption policy based on phase configuration
@@ -148,7 +141,7 @@ class TrialSession:
             f"Role: {role.value}"
         )
 
-    def _build_record(self, role: Role, phase: Phase, content: str, token_count: int) -> UtteranceLog:
+    def _build_record(self, role: Role, phase: Phase, content: str) -> UtteranceLog:
         """Create a minimal log entry for downstream metric extraction."""
 
         rec = UtteranceLog(
@@ -156,25 +149,13 @@ class TrialSession:
             phase=phase,
             content=content,
             byte_count=len(content.encode("utf-8")),
-            token_count=token_count,
+            token_count=None,
             addressed_to=None,
             timestamp=datetime.utcnow(),
         )
         return rec
 
     # --- Helpers ---
-    def _apply_token_budget(self, role: Role, content: str) -> str:
-        budget = self.config.budget_for(role)
-        max_tokens = budget.max_tokens
-        if max_tokens is None:
-            return content
-        current = self._tokens_used.get(role, 0)
-        remaining = max(0, max_tokens - current)
-        if remaining <= 0:
-            return ""
-        truncated, _ = self.tokenizer.truncate(content, remaining)
-        return truncated
-
     def _apply_byte_budget(self, role: Role, content: str) -> str:
         budget = self.config.budget_for(role)
         current = self._bytes_used.get(role, 0)
@@ -186,14 +167,6 @@ class TrialSession:
         used = len(content.encode("utf-8"))
         self._bytes_used[role] = current + used
         return content
-
-    def _consume_tokens(self, role: Role, token_count: int) -> None:
-        current = self._tokens_used.get(role, 0)
-        budget = self.config.budget_for(role)
-        new_total = current + token_count
-        if budget.max_tokens is not None:
-            new_total = min(budget.max_tokens, new_total)
-        self._tokens_used[role] = new_total
 
     def _load_and_render_case(self) -> str:
         path = Path(self.config.case_template)

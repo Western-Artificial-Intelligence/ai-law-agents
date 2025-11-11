@@ -30,7 +30,7 @@ class UtteranceLog:
     phase: Phase
     content: str
     byte_count: int
-    token_count: int
+    token_count: Optional[int]
     addressed_to: Optional[Role]
     timestamp: datetime
     interruption: bool = False
