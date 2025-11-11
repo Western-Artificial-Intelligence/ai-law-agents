@@ -306,9 +306,13 @@ class TrialSession:
         """Parse structured JSON if present, otherwise fall back to regex heuristics."""
 
         verdict, sentence = TrialSession._parse_structured_verdict(text)
-        if verdict is not None or sentence is not None:
-            return verdict, sentence
-        return TrialSession._regex_verdict(text), TrialSession._regex_sentence(text)
+
+        if verdict is None:
+            verdict = TrialSession._regex_verdict(text)
+        if sentence is None:
+            sentence = TrialSession._regex_sentence(text)
+
+        return verdict, sentence
 
     @staticmethod
     def _parse_structured_verdict(text: str) -> Tuple[Optional[str], Optional[str]]:
