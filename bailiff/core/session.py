@@ -25,6 +25,7 @@ class TrialSession:
     policy_hooks: Optional[Dict[str, Callable[[TrialLog], None]]] = None
     _log: Optional[TrialLog] = field(default=None, init=False, repr=False)
     _bytes_used: Dict[Role, int] = field(default_factory=dict, init=False, repr=False)
+    _tokens_used: Dict[Role, int] = field(default_factory=dict, init=False, repr=False)
     _case_text: Optional[str] = field(default=None, init=False, repr=False)
     # NEW: Tracks count of each type of policy violation during trial execution
     # Format: {"interruption_not_allowed": 2, "judge_cue_exposure": 1}
@@ -35,6 +36,7 @@ class TrialSession:
 
         self._log = self.log_factory(self.config)
         self._bytes_used = {role: 0 for role in Role}
+        self._tokens_used = {role: 0 for role in Role}
         self._case_text = self._load_and_render_case()
         for phase in DEFAULT_PHASE_ORDER:
             self._run_phase(phase)
@@ -58,9 +60,8 @@ class TrialSession:
             max_msgs = max(1, pb.max_messages)
             for _ in range(max_msgs):
                 content = self._emit(role, phase)
-                # Enforce byte budget per role by truncation
-                content = self._apply_byte_budget(role, content)
-                record = self._build_record(role, phase, content)
+                content, token_count = self._apply_role_budgets(role, content)
+                record = self._build_record(role, phase, content, token_count)
                 self._apply_event_tagging(record)
                 
                 # NEW: Enforce interruption policy based on phase configuration
@@ -141,7 +142,7 @@ class TrialSession:
             f"Role: {role.value}"
         )
 
-    def _build_record(self, role: Role, phase: Phase, content: str) -> UtteranceLog:
+    def _build_record(self, role: Role, phase: Phase, content: str, token_count: int) -> UtteranceLog:
         """Create a minimal log entry for downstream metric extraction."""
 
         rec = UtteranceLog(
@@ -149,13 +150,33 @@ class TrialSession:
             phase=phase,
             content=content,
             byte_count=len(content.encode("utf-8")),
-            token_count=None,
+            token_count=token_count,
             addressed_to=None,
             timestamp=datetime.utcnow(),
         )
         return rec
 
     # --- Helpers ---
+    def _apply_role_budgets(self, role: Role, content: str) -> Tuple[str, int]:
+        """Enforce per-role token and byte limits."""
+
+        content = self._apply_token_budget(role, content)
+        content = self._apply_byte_budget(role, content)
+        token_count = self._count_tokens(content)
+        self._tokens_used[role] = self._tokens_used.get(role, 0) + token_count
+        return content, token_count
+
+    def _apply_token_budget(self, role: Role, content: str) -> str:
+        budget = self.config.budget_for(role)
+        max_tokens = budget.max_tokens
+        if max_tokens is None:
+            return content
+        used = self._tokens_used.get(role, 0)
+        remaining = max(max_tokens - used, 0)
+        if remaining == 0:
+            return ""
+        return self._truncate_to_tokens(content, remaining)
+
     def _apply_byte_budget(self, role: Role, content: str) -> str:
         budget = self.config.budget_for(role)
         current = self._bytes_used.get(role, 0)
@@ -167,6 +188,20 @@ class TrialSession:
         used = len(content.encode("utf-8"))
         self._bytes_used[role] = current + used
         return content
+
+    def _truncate_to_tokens(self, content: str, max_tokens: int) -> str:
+        if max_tokens <= 0 or not content:
+            return ""
+        matches = list(self._TOKEN_RE.finditer(content))
+        if len(matches) <= max_tokens:
+            return content
+        end = matches[max_tokens - 1].end()
+        return content[:end]
+
+    def _count_tokens(self, content: str) -> int:
+        if not content:
+            return 0
+        return len(self._TOKEN_RE.findall(content))
 
     def _load_and_render_case(self) -> str:
         path = Path(self.config.case_template)
@@ -196,6 +231,7 @@ class TrialSession:
             f"Witnesses:\n{witnesses_text}"
         )
 
+    _TOKEN_RE = re.compile(r"\S+")
     _OBJECTION_RE = re.compile(r"\b(objection)\b", re.IGNORECASE)
     _SUSTAIN_RE = re.compile(r"\b(sustain|sustained)\b", re.IGNORECASE)
     _OVERRULE_RE = re.compile(r"\b(overrule|overruled)\b", re.IGNORECASE)
