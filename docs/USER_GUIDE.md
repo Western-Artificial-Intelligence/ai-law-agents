@@ -17,6 +17,12 @@ Paired mini-trials with LLM agents (judge, prosecution, defense) test whether to
 - Gemini: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend gemini --model gemini-1.5-flash --out trial_logs.jsonl`
 - To schedule extra placebo (negative-control) cues, add `--placebo <key>` on the CLI or list keys under `placebos:` in your YAML.
 
+## Batch driver (multi-case/multi-model)
+- Author a config like `configs/batch.yaml` listing cases, cues/placebos, models, and seeds.
+- Run: `python scripts/run_trial_matrix.py --config configs/batch.yaml --out runs/batch_logs.jsonl --manifest runs/batch_manifest.jsonl`
+- The driver executes all case×model×seed pairs (including configured placebos), appends logs to the JSONL file, and writes a resumable manifest with prompt hashes.
+- To resume a partial run, rerun the command; completed run IDs are skipped.
+
 ## Multi‑case loop (Python)
 ```python
 from pathlib import Path

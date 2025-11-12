@@ -1,0 +1,39 @@
+﻿# Example batch configuration for multi-case/model execution.
+cases:
+  - template: bailiff/datasets/cases/traffic.yaml
+    cue: name_ethnicity
+    placebos: [name_placebo]
+    judge_blinding: false
+  - template: bailiff/datasets/cases/simple_assault.yaml
+    cue: name_ethnicity
+models:
+  - backend: echo
+    model: echo
+seeds: [101, 102]
+agent_budgets:
+  judge:
+    max_bytes: 1500
+  prosecution:
+    max_bytes: 1800
+  defense:
+    max_bytes: 1800
+phase_budgets:
+  - phase: opening
+    max_messages: 2
+  - phase: direct
+    max_messages: 2
+  - phase: cross
+    max_messages: 2
+  - phase: redirect
+    max_messages: 1
+  - phase: closing
+    max_messages: 2
+  - phase: verdict
+    max_messages: 1
+  - phase: audit
+    max_messages: 1
+concurrency: 2
+max_retries: 2
+backoff_seconds: 1.5
+out_logs: runs/batch_logs.jsonl
+manifest: runs/batch_manifest.jsonl

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import List, Optional
 
 from dotenv import load_dotenv
 from pydantic import Field
@@ -15,13 +15,10 @@ from bailiff.agents.prompts import prompt_for
 from bailiff.core.config import AgentBudget, CueToggle, PhaseBudget, Phase, Role, TrialConfig
 from bailiff.core.io import write_jsonl
 from bailiff.core.logging import default_log_factory
-from bailiff.datasets.templates import cue_catalog, placebo_catalog
+from bailiff.datasets.templates import cue_catalog
 from bailiff.orchestration.pipeline import TrialPipeline
-from bailiff.orchestration.randomization import (
-    RandomizationBlock,
-    block_identifier,
-    blockwise_permutations,
-)
+from bailiff.orchestration.blocks import build_blocks, resolve_placebos
+from bailiff.orchestration.randomization import block_identifier, blockwise_permutations
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -49,47 +46,6 @@ class EchoBackend:
 
     def __call__(self, prompt: str, **_: object) -> str:
         return f"[ECHO]\n{prompt}"
-
-
-def _resolve_placebos(keys: Sequence[str]) -> List[CueToggle]:
-    """Return CueToggle objects for requested placebo names."""
-
-    if not keys:
-        return []
-    lookup = {cue.name: cue for cue in placebo_catalog()}
-    toggles: List[CueToggle] = []
-    for key in keys:
-        toggle = lookup.get(key)
-        if toggle is None:
-            raise SystemExit(f"Unknown placebo cue key: {key}")
-        toggles.append(toggle)
-    return toggles
-
-
-def _blocks_for(
-    case_identifier: str,
-    model_identifier: str,
-    cues: Sequence[CueToggle],
-    seeds: Sequence[int],
-    placebo_names: Sequence[str],
-) -> List[RandomizationBlock]:
-    """Build RandomizationBlock definitions for the provided cues."""
-
-    seed_list = list(seeds)
-    placebo_lookup = set(placebo_names)
-    blocks: List[RandomizationBlock] = []
-    for cue in cues:
-        blocks.append(
-            RandomizationBlock(
-                case_identifier=case_identifier,
-                model_identifier=model_identifier,
-                cue_name=cue.name,
-                values=[cue.control_value, cue.treatment_value],
-                seeds=seed_list,
-                is_placebo=cue.name in placebo_lookup,
-            )
-        )
-    return blocks
 
 
 def parse_args() -> dict[str, object]:
@@ -171,7 +127,7 @@ def main() -> None:
         }
         phase_budgets = [PhaseBudget(phase=phase) for phase in Phase]
     placebo_keys = list(dict.fromkeys(placebo_keys))
-    placebo_toggles = _resolve_placebos(placebo_keys)
+    placebo_toggles = resolve_placebos(placebo_keys)
     case_identifier = case_path.stem
     block_key = block_identifier(case_identifier, model_id)
     base_config = TrialConfig(
@@ -209,7 +165,7 @@ def main() -> None:
     pipeline = TrialPipeline(agents=agents, log_factory=default_log_factory)
     cues_for_blocks: List[CueToggle] = [cue, *placebo_toggles]
     placebo_names = [toggle.name for toggle in placebo_toggles]
-    block_defs = _blocks_for(case_identifier, model_id, cues_for_blocks, seeds=[seed], placebo_names=placebo_names)
+    block_defs = build_blocks(case_identifier, model_id, cues_for_blocks, seeds=[seed], placebo_names=placebo_names)
     assignments = blockwise_permutations(block_defs)
     logs = []
     for pair_plan in pipeline.assign_pairs(base_config, assignments):

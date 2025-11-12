@@ -9,6 +9,7 @@ This repository implements a reproducible harness for auditing fairness in inter
 - Structured logs with event tags (objections, interruptions, safety)
 - Metrics: paired McNemar log‑odds, flip rate, byte share, measurement‑error correction, basic tone utilities
 - Extensible backends: Echo (offline), Groq, Gemini; open‑source adapters are easy to add
+- Batch driver with resumable manifests for running K×L×N matrices
 
 ## Quickstart
 1. Create a virtual environment and install:
@@ -20,6 +21,7 @@ This repository implements a reproducible harness for auditing fairness in inter
    - Groq: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend groq --model llama3-8b-8192 --out trial_logs.jsonl`
    - Gemini: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend gemini --model gemini-1.5-flash --out trial_logs.jsonl`
    - Add `--placebo <key>` (e.g., `name_placebo`) to schedule additional negative-control pairs if you are not using the sample YAML.
+4. Run a batch across cases/models: `python scripts/run_trial_matrix.py --config configs/batch.yaml --out runs/batch_logs.jsonl --manifest runs/batch_manifest.jsonl`
 
 ## Repository Layout
 - `bailiff/core`: State machine, config, logging, session engine, JSONL I/O
