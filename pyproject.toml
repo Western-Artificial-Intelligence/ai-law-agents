@@ -1,4 +1,4 @@
-﻿[build-system]
+[build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
@@ -18,7 +18,9 @@ dependencies = [
   "scipy>=1.10",
   "statsmodels>=0.14",
   "pydantic>=2.5",
+  "pydantic-settings>=2.1",
   "pyyaml>=6.0",
+  "python-dotenv>=1.0",
   "tqdm>=4.66"
 ]
 

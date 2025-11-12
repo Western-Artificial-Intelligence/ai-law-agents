@@ -1,4 +1,4 @@
-﻿"""Configuration primitives for trial simulations."""
+"""Configuration primitives for trial simulations."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -25,6 +25,21 @@ class Phase(str, Enum):
     CLOSING = "closing"
     VERDICT = "verdict"
     AUDIT = "audit"
+
+
+class PolicyViolation(str, Enum):
+    """Types of policy violations that can be detected and enforced.
+    
+    NEW: Added to track different types of policy violations during trial execution.
+    Violations are counted and can be audited after trial completion.
+    """
+
+    # Triggered when an agent attempts to interrupt in a phase that doesn't allow it
+    INTERRUPTION_NOT_ALLOWED = "interruption_not_allowed"
+    # Triggered when judge prompt or output contains demographic cue values under blinding
+    JUDGE_CUE_EXPOSURE = "judge_cue_exposure"
+    # Triggered when a role speaks in a phase they're not authorized for
+    ROLE_PHASE_MISMATCH = "role_phase_mismatch"
 
 
 @dataclass(slots=True)
@@ -71,6 +86,12 @@ class TrialConfig:
     cue_value: Optional[str] = None
     # Policy toggles
     judge_blinding: bool = False
+    # NEW: Enhanced blinding mode that redacts BOTH control and treatment cue values
+    # from judge prompts, not just the active one. Prevents any demographic leakage.
+    strict_blinding: bool = False
+    # NEW: When enabled, validates that roles only speak in their designated phases
+    # (e.g., defense can't speak during verdict). Raises ValueError if violated.
+    enforce_role_phase_policy: bool = True
     notes: Optional[str] = None
 
     def budget_for(self, role: Role) -> AgentBudget:
