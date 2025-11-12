@@ -128,6 +128,7 @@ flowchart LR
 ## Extending
 - Backends: use `bailiff.agents.backends` for Groq/Gemini, or implement the `AgentBackend` protocol for local models.
 - Policies: add hooks to `TrialSession` for stricter guardrails (e.g., JSON‑constrained outputs, judge‑only blinding, role‑specific filters).
+- Cases: `bailiff.datasets.load_case_templates()` enumerates/validates YAML definitions (required fields + cue slots).
 
 
 ## Design Highlights

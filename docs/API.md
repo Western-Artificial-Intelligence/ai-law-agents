@@ -70,6 +70,7 @@ This is a concise reference of the primary classes and functions. Import paths a
 - `bailiff.datasets.templates`
   - `CaseTemplate(identifier, description, template_path)`
   - `default_cases(root) -> list[CaseTemplate]`
+  - `load_case_templates(root) -> list[CaseTemplate]`
   - `cue_catalog() -> dict[str, CueToggle]`
   - `placebo_catalog() -> Iterable[CueToggle]`
 
