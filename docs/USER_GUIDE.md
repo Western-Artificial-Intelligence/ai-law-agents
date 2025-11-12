@@ -28,6 +28,11 @@ Paired mini-trials with LLM agents (judge, prosecution, defense) test whether to
 - Validation runs automatically whenever `write_jsonl`/`append_jsonl` are called. Set `BAILIFF_VALIDATE_LOGS=0` to disable (e.g., for very large batches).
 - Validation failures raise a `jsonschema.ValidationError` highlighting the offending field.
 
+## Backend retry policy
+- `scripts/run_pilot_trial.py` exposes `--timeout-seconds`, `--max-retries`, `--backoff-seconds`, `--backoff-multiplier`, and `--rate-limit-seconds` plus YAML overrides under `backend_policy`.
+- Batch configs support per-model (or global) `backend_policy` blocks with the same keys; parameters are logged in each `TrialLog`.
+- Backend parameters (e.g., `temperature`) can be supplied via `backend_params` in YAML (or repeated `--backend-param key=value` flags) and are recorded in `model_parameters`.
+
 ## Multi‑case loop (Python)
 ```python
 from pathlib import Path
@@ -108,7 +113,7 @@ Edit `bailiff/datasets/templates.py` → `cue_catalog()` and add a `CueToggle` w
 Implement the callable protocol and plug into `AgentSpec` or use `GroqBackend`/`GeminiBackend` from `bailiff.agents.backends`.
 
 ## Basic analysis
-Each JSONL row includes `block_key` (case×model), `is_placebo`, and `schema_version`. Filter on `is_placebo=False` when computing primary estimates.
+Each JSONL row includes `block_key` (case×model), `is_placebo`, `schema_version`, `backend_name`, and `model_parameters`. Filter on `is_placebo=False` when computing primary estimates.
 ```python
 from pathlib import Path
 import pandas as pd

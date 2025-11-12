@@ -9,6 +9,12 @@ cases:
 models:
   - backend: echo
     model: echo
+    backend_policy:
+      timeout_seconds: 45
+      max_retries: 2
+      backoff_seconds: 1.0
+      backoff_multiplier: 2.0
+      rate_limit_seconds: 0.0
 seeds: [101, 102]
 agent_budgets:
   judge:

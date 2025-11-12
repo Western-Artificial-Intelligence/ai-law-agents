@@ -8,13 +8,13 @@ This is a concise reference of the primary classes and functions. Import paths a
   - `AgentBudget(max_bytes, max_tokens=None, max_turns=None)`
   - `PhaseBudget(phase, max_messages=2, allow_interruptions=False)`
   - `CueToggle(name, control_value, treatment_value, metadata={})`
-  - `TrialConfig(case_template, cue, model_identifier, seed, agent_budgets, phase_budgets, ..., cue_condition=None, cue_value=None, block_key=None, is_placebo=False, judge_blinding=False)`
+  - `TrialConfig(case_template, cue, model_identifier, backend_name=None, model_parameters=None, seed, agent_budgets, phase_budgets, ..., cue_condition=None, cue_value=None, block_key=None, is_placebo=False, judge_blinding=False)`
   - `DEFAULT_PHASE_ORDER: list[Phase]`
 - `bailiff.core.events`
   - `ObjectionRuling` — Enum
   - `EventTag(name, value=None)`
   - `UtteranceLog(role, phase, content, byte_count, token_count, addressed_to, timestamp, interruption=False, objection_raised=False, objection_ruling=None, safety_triggered=False, tags=[])`
-  - `TrialLog(trial_id, case_identifier, model_identifier, cue_name, cue_condition, cue_value, block_key, is_placebo, seed, started_at, completed_at, utterances=[], verdict=None, sentence=None, schema_version='0.1')`
+  - `TrialLog(trial_id, case_identifier, model_identifier, backend_name, model_parameters, cue_name, cue_condition, cue_value, block_key, is_placebo, seed, started_at, completed_at, utterances=[], verdict=None, sentence=None, schema_version)`
 - `bailiff.core.logging`
   - `default_log_factory(config) -> TrialLog`
   - `mark_completed(log) -> None`
@@ -54,8 +54,10 @@ This is a concise reference of the primary classes and functions. Import paths a
 
 ## Agents
 - `bailiff.agents.base`
+  - `RetryPolicy(max_retries=2, initial_backoff=1.0, backoff_multiplier=2.0, timeout_seconds=30.0, rate_limit_seconds=0.0)`
+  - `BackendTimeoutError`
   - `AgentBackend` — callable protocol `__call__(prompt, **kwargs) -> str`
-  - `AgentSpec(role, system_prompt, backend, default_params=None)`
+  - `AgentSpec(role, system_prompt, backend, default_params=None, retry_policy=RetryPolicy())`
     - `.to_responder() -> Callable[[Role, Phase, str], str]`
   - `build_responder_map(specs) -> dict[Role, Callable]`
 - `bailiff.agents.prompts`

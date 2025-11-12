@@ -77,6 +77,8 @@ class TrialConfig:
     case_template: Path
     cue: CueToggle
     model_identifier: str
+    backend_name: Optional[str] = None
+    model_parameters: Mapping[str, object] = field(default_factory=dict)
     seed: int
     agent_budgets: Mapping[Role, AgentBudget]
     phase_budgets: Sequence[PhaseBudget]
