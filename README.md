@@ -42,6 +42,7 @@ This repository implements a reproducible harness for auditing fairness in inter
 - User guide (install, run, add case/cue/backend, analysis): `docs/USER_GUIDE.md`
 - API reference (core modules): `docs/API.md`
 - Measurement-error calibration CLI: `scripts/run_measurement_calibration.py`
+- Outcome scripts (GLMM, GEE+Satterthwaite, wild cluster bootstrap): `docs/OUTCOME_SCRIPTS.md`
 
 ## FAQ
 - How do I add a new case? Create a YAML under `bailiff/datasets/cases/` with `summary`, `facts`, `witnesses`, and `cue_slots`, then run `load_case_templates()` to validate it. See the user guide.

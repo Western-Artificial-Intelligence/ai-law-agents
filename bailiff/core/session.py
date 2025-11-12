@@ -26,6 +26,10 @@ class TrialSession:
     _log: Optional[TrialLog] = field(default=None, init=False, repr=False)
     _bytes_used: Dict[Role, int] = field(default_factory=dict, init=False, repr=False)
     _case_text: Optional[str] = field(default=None, init=False, repr=False)
+
+    def run(self) -> TrialLog:
+        """Execute the state machine and return the populated trial log."""
+
     # NEW: Tracks count of each type of policy violation during trial execution
     # Format: {"interruption_not_allowed": 2, "judge_cue_exposure": 1}
     _policy_violations: Dict[str, int] = field(default_factory=dict, init=False, repr=False)
@@ -93,6 +97,10 @@ class TrialSession:
         responder = self.responders[role]
         prompt = self._build_prompt(role, phase)
         return responder(role, phase, prompt)
+
+    def _build_prompt(self, role: Role, phase: Phase) -> str:
+        """Construct the shared prompt context passed to an agent responder."""
+
 
     def _build_prompt(self, role: Role, phase: Phase) -> str:
         """Construct the shared prompt context passed to an agent responder.
