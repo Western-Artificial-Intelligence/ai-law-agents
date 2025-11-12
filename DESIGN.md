@@ -138,6 +138,7 @@ flowchart LR
 - Agents & Prompts: `AgentSpec` composes a role system prompt with shared context and calls a pluggable backend (Echo/LLM). Canonical role prompts live in `bailiff/agents/prompts.py`.
 - Structured Logging: Each utterance captures role, phase, content bytes/tokens (token optional), flags for interruptions/objections/safety, timestamps, plus trial‑level metadata.
 - Batch Driver: `scripts/run_trial_matrix.py` enumerates case×model×seed matrices, streams JSONL logs, and records a resumable manifest with prompt hashes.
+- TrialLog Schema: `bailiff/schemas/trial_log.schema.json` (enforced by `bailiff/core/schema.py`) ensures logs are versioned and machine-validated on write.
 
 ## Estimands & Metrics (Alignment to Manuscript)
 

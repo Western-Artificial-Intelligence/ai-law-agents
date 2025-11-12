@@ -28,6 +28,9 @@ This is a concise reference of the primary classes and functions. Import paths a
   - `RunManifestEntry(...)`
   - `RunManifest(path)`
   - `compute_prompt_hash(*components) -> str`
+- `bailiff.core.schema`
+  - `SCHEMA_VERSION`
+  - `validate_trial_log(record) -> None`
 
 ## Orchestration
 - `bailiff.orchestration.randomization`
@@ -36,6 +39,9 @@ This is a concise reference of the primary classes and functions. Import paths a
   - `block_identifier(case_identifier, model_identifier) -> str`
   - `blocked_permutations(values, seeds, *, cue_name=None, block_key=None, ...) -> Iterator[PairAssignment]`
   - `blockwise_permutations(blocks) -> Iterator[PairAssignment]`
+- `bailiff.orchestration.blocks`
+  - `resolve_placebos(keys) -> list[CueToggle]`
+  - `build_blocks(case_identifier, model_identifier, cues, seeds, placebo_names) -> list[RandomizationBlock]`
 - `bailiff.orchestration.pipeline`
   - `TrialPlan(config, cue_value)`
   - `PairPlan(control: TrialPlan, treatment: TrialPlan)`

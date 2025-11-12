@@ -23,6 +23,11 @@ Paired mini-trials with LLM agents (judge, prosecution, defense) test whether to
 - The driver executes all case×model×seed pairs (including configured placebos), appends logs to the JSONL file, and writes a resumable manifest with prompt hashes.
 - To resume a partial run, rerun the command; completed run IDs are skipped.
 
+## TrialLog schema validation
+- Every log row follows `bailiff/schemas/trial_log.schema.json` (schema version recorded in `schema_version`).
+- Validation runs automatically whenever `write_jsonl`/`append_jsonl` are called. Set `BAILIFF_VALIDATE_LOGS=0` to disable (e.g., for very large batches).
+- Validation failures raise a `jsonschema.ValidationError` highlighting the offending field.
+
 ## Multi‑case loop (Python)
 ```python
 from pathlib import Path
@@ -103,7 +108,7 @@ Edit `bailiff/datasets/templates.py` → `cue_catalog()` and add a `CueToggle` w
 Implement the callable protocol and plug into `AgentSpec` or use `GroqBackend`/`GeminiBackend` from `bailiff.agents.backends`.
 
 ## Basic analysis
-Each JSONL row includes `block_key` (case×model) and `is_placebo`. Filter on `is_placebo=False` when computing primary estimates.
+Each JSONL row includes `block_key` (case×model), `is_placebo`, and `schema_version`. Filter on `is_placebo=False` when computing primary estimates.
 ```python
 from pathlib import Path
 import pandas as pd

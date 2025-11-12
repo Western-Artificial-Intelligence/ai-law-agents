@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,13 @@ from typing import Dict, Iterable, List, Optional, Sequence
 
 from .events import TrialLog, UtteranceLog, ObjectionRuling
 from .config import Phase, Role
+from .schema import validate_trial_log
+
+_DEFAULT_VALIDATE = os.getenv("BAILIFF_VALIDATE_LOGS", "1").lower() not in {"0", "false", "no"}
+
+
+def _should_validate(flag: Optional[bool]) -> bool:
+    return _DEFAULT_VALIDATE if flag is None else flag
 
 
 @dataclass
@@ -87,21 +95,27 @@ def _encode(obj):  # type: ignore[override]
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
-def write_jsonl(logs: Iterable[TrialLog], path: Path) -> None:
+def write_jsonl(logs: Iterable[TrialLog], path: Path, *, validate: Optional[bool] = None) -> None:
+    validate_flag = _should_validate(validate)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
         for log in logs:
             rec = asdict(log)
+            if validate_flag:
+                validate_trial_log(rec)
             f.write(json.dumps(rec, default=_encode, ensure_ascii=False) + "\n")
 
 
-def append_jsonl(logs: Iterable[TrialLog], path: Path) -> None:
+def append_jsonl(logs: Iterable[TrialLog], path: Path, *, validate: Optional[bool] = None) -> None:
     """Append logs to an existing JSONL file (creating it if missing)."""
 
+    validate_flag = _should_validate(validate)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
         for log in logs:
             rec = asdict(log)
+            if validate_flag:
+                validate_trial_log(rec)
             f.write(json.dumps(rec, default=_encode, ensure_ascii=False) + "\n")
 
 
