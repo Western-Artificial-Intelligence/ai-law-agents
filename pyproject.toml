@@ -37,6 +37,10 @@ analysis = [
   "seaborn>=0.13",
   "plotnine>=0.12"
 ]
+local = [
+  "transformers>=4.41",
+  "llama-cpp-python>=0.2"
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
