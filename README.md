@@ -23,6 +23,7 @@ This repository implements a reproducible harness for auditing fairness in inter
    - Groq: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend groq --model llama3-8b-8192 --out trial_logs.jsonl`
    - Gemini: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend gemini --model gemini-1.5-flash --out trial_logs.jsonl`
    - Add `--placebo <key>` (e.g., `name_placebo`) to schedule additional negative-control pairs if you are not using the sample YAML.
+   - Provide `--manifest runs/pilot_manifest.jsonl` to co-save per-run metadata with prompt hashes.
 4. Run a batch across cases/models: `python scripts/run_trial_matrix.py --config configs/batch.yaml --out runs/batch_logs.jsonl --manifest runs/batch_manifest.jsonl`
 
 ## Repository Layout

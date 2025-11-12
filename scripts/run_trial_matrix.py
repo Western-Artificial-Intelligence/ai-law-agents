@@ -208,6 +208,18 @@ def case_text_for_hash(path: Path) -> str:
         return path.name
 
 
+def _prompt_hash_for_log(log) -> str:
+    return compute_prompt_hash(
+        log.trial_id,
+        log.case_identifier,
+        log.cue_name,
+        log.cue_value or "",
+        log.model_identifier,
+        log.backend_name or "",
+        log.cue_condition or "",
+    )
+
+
 def execute_job(
     job: BatchJob,
     budgets: Dict[Role, AgentBudget],
@@ -260,6 +272,9 @@ def execute_job(
                 plan_iter = pipeline.assign_pairs(base_config, [assignment])
                 plan = next(plan_iter)
                 logs = pipeline.run_pair(plan)
+                control_hash = _prompt_hash_for_log(logs[0])
+                treatment_hash = _prompt_hash_for_log(logs[1])
+                pair_hash = compute_prompt_hash(control_hash, treatment_hash, case_blob)
                 append_jsonl(logs, out_path)
                 manifest.append(
                     RunManifestEntry(
@@ -274,13 +289,9 @@ def execute_job(
                         treatment_seed=assignment.seed + 1,
                         block_key=assignment.block_key,
                         is_placebo=assignment.is_placebo,
-                        prompt_hash=compute_prompt_hash(
-                            case_blob,
-                            assignment.control_value,
-                            assignment.treatment_value,
-                            job.model.model_identifier,
-                            job.model.backend,
-                        ),
+                        prompt_hash=pair_hash,
+                        prompt_hash_control=control_hash,
+                        prompt_hash_treatment=treatment_hash,
                         params=job.model.params,
                         trial_ids=tuple(log.trial_id for log in logs),
                         log_path=str(out_path),
@@ -306,6 +317,8 @@ def execute_job(
                             block_key=assignment.block_key,
                             is_placebo=assignment.is_placebo,
                             prompt_hash="failed",
+                            prompt_hash_control=None,
+                            prompt_hash_treatment=None,
                             params=job.model.params,
                             trial_ids=(),
                             log_path=str(out_path),

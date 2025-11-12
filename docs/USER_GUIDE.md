@@ -16,6 +16,7 @@ Paired mini-trials with LLM agents (judge, prosecution, defense) test whether to
 - Groq: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend groq --model llama3-8b-8192 --out trial_logs.jsonl`
 - Gemini: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend gemini --model gemini-1.5-flash --out trial_logs.jsonl`
 - To schedule extra placebo (negative-control) cues, add `--placebo <key>` on the CLI or list keys under `placebos:` in your YAML.
+- Use `--manifest runs/pilot_manifest.jsonl` to capture per-run metadata (cases/cues/seeds/models/prompt hashes).
 
 ## Batch driver (multi-case/multi-model)
 - Author a config like `configs/batch.yaml` listing cases, cues/placebos, models, and seeds.
