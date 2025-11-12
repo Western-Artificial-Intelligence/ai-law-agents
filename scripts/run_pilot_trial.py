@@ -3,21 +3,25 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Sequence
 
-from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
+from pydantic import Field
+from pydantic_settings import BaseSettings
+import yaml
 
 from bailiff.agents.base import AgentSpec
 from bailiff.agents.prompts import prompt_for
 from bailiff.core.config import AgentBudget, CueToggle, PhaseBudget, Phase, Role, TrialConfig
-from bailiff.core.logging import default_log_factory
-from bailiff.orchestration.pipeline import TrialPipeline
-from bailiff.orchestration.randomization import blocked_permutations
 from bailiff.core.io import write_jsonl
-from bailiff.datasets.templates import cue_catalog
-import yaml
+from bailiff.core.logging import default_log_factory
+from bailiff.datasets.templates import cue_catalog, placebo_catalog
+from bailiff.orchestration.pipeline import TrialPipeline
+from bailiff.orchestration.randomization import (
+    RandomizationBlock,
+    block_identifier,
+    blockwise_permutations,
+)
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -34,6 +38,7 @@ class PilotConfig(BaseSettings):
     backend: Backend = Field(Backend.ECHO, description="LLM backend to use")
     model: Optional[str] = Field(None, description="Model identifier for backend")
     out: Optional[Path] = Field(None, description="Optional JSONL output path")
+    placebos: List[str] = Field(default_factory=list, description="Placebo cue keys to schedule")
 
     class Config:
         env_prefix = "BAILIFF_"  # Environment variables will be prefixed with BAILIFF_
@@ -46,6 +51,47 @@ class EchoBackend:
         return f"[ECHO]\n{prompt}"
 
 
+def _resolve_placebos(keys: Sequence[str]) -> List[CueToggle]:
+    """Return CueToggle objects for requested placebo names."""
+
+    if not keys:
+        return []
+    lookup = {cue.name: cue for cue in placebo_catalog()}
+    toggles: List[CueToggle] = []
+    for key in keys:
+        toggle = lookup.get(key)
+        if toggle is None:
+            raise SystemExit(f"Unknown placebo cue key: {key}")
+        toggles.append(toggle)
+    return toggles
+
+
+def _blocks_for(
+    case_identifier: str,
+    model_identifier: str,
+    cues: Sequence[CueToggle],
+    seeds: Sequence[int],
+    placebo_names: Sequence[str],
+) -> List[RandomizationBlock]:
+    """Build RandomizationBlock definitions for the provided cues."""
+
+    seed_list = list(seeds)
+    placebo_lookup = set(placebo_names)
+    blocks: List[RandomizationBlock] = []
+    for cue in cues:
+        blocks.append(
+            RandomizationBlock(
+                case_identifier=case_identifier,
+                model_identifier=model_identifier,
+                cue_name=cue.name,
+                values=[cue.control_value, cue.treatment_value],
+                seeds=seed_list,
+                is_placebo=cue.name in placebo_lookup,
+            )
+        )
+    return blocks
+
+
 def parse_args() -> dict[str, object]:
     """Parse command line arguments into a dictionary."""
     import argparse
@@ -56,6 +102,13 @@ def parse_args() -> dict[str, object]:
     parser.add_argument("--backend", choices=["echo", "groq", "gemini"], help="LLM backend to use")
     parser.add_argument("--model", help="Model identifier for backend")
     parser.add_argument("--out", type=Path, help="Optional JSONL output path")
+    parser.add_argument(
+        "--placebo",
+        action="append",
+        dest="placebos",
+        default=[],
+        help="Placebo cue key to schedule as a negative control (repeatable).",
+    )
     args = parser.parse_args()
     # Convert to dict and remove None values
     return {k: v for k, v in vars(args).items() if v is not None}
@@ -63,7 +116,8 @@ def parse_args() -> dict[str, object]:
 def main() -> None:
     # Load configuration from environment variables and command line arguments
     args = PilotConfig(**parse_args())
-    
+    placebo_keys: List[str] = list(args.placebos)
+
     # Load additional config from YAML file if specified
     if args.config:
         cfg = yaml.safe_load(args.config.read_text(encoding="utf-8"))
@@ -80,7 +134,7 @@ def main() -> None:
             case_path = args.case.resolve()
         else:
             raise SystemExit("No case template file specified in config or command line arguments.")
-        model_id = cfg.get("model_identifier", args.model or "echo")
+        model_id = cfg.get("model_identifier") or args.model or args.backend.value
         seed = int(cfg.get("seed", args.seed))
         judge_blinding = bool(cfg.get("judge_blinding", False))
         # Budgets
@@ -97,6 +151,7 @@ def main() -> None:
             else PhaseBudget(phase=Phase(item))
             for item in pb_cfg
         ] or [PhaseBudget(phase=ph) for ph in Phase]
+        placebo_keys.extend(cfg.get("placebos", []) or [])
     else:
         if args.case is None:
             raise SystemExit("Provide a case path or a --config file")
@@ -106,7 +161,7 @@ def main() -> None:
             treatment_value="DeShawn Jackson",
         )
         case_path = args.case.resolve()
-        model_id = args.model or "echo"
+        model_id = args.model or args.backend.value
         seed = args.seed
         judge_blinding = False
         budgets = {
@@ -115,7 +170,10 @@ def main() -> None:
             Role.DEFENSE: AgentBudget(max_bytes=1800),
         }
         phase_budgets = [PhaseBudget(phase=phase) for phase in Phase]
-        
+    placebo_keys = list(dict.fromkeys(placebo_keys))
+    placebo_toggles = _resolve_placebos(placebo_keys)
+    case_identifier = case_path.stem
+    block_key = block_identifier(case_identifier, model_id)
     base_config = TrialConfig(
         case_template=case_path,
         cue=cue,
@@ -124,8 +182,10 @@ def main() -> None:
         agent_budgets=budgets,
         phase_budgets=phase_budgets,
         judge_blinding=judge_blinding,
+        negative_controls=tuple(placebo_toggles),
+        block_key=block_key,
     )
-    
+
     # Select backend based on config
     if args.backend == Backend.ECHO:
         backend = EchoBackend()
@@ -134,24 +194,29 @@ def main() -> None:
             from bailiff.agents.backends import GroqBackend  # type: ignore
         except Exception as e:  # pragma: no cover - optional dep
             raise SystemExit(f"Groq backend unavailable: {e}")
-        backend = GroqBackend(model=args.model or "llama3-8b-8192")
+        backend = GroqBackend(model=model_id or "llama3-8b-8192")
     else:  # gemini
         try:
             from bailiff.agents.backends import GeminiBackend  # type: ignore
         except Exception as e:  # pragma: no cover - optional dep
             raise SystemExit(f"Gemini backend unavailable: {e}")
-        backend = GeminiBackend(model=args.model or "gemini-1.5-flash")
-        
+        backend = GeminiBackend(model=model_id or "gemini-1.5-flash")
+
     agents = {
         role: AgentSpec(role=role, system_prompt=prompt_for(role), backend=backend)
         for role in Role
     }
     pipeline = TrialPipeline(agents=agents, log_factory=default_log_factory)
-    assignments = blocked_permutations([cue.control_value, cue.treatment_value], seeds=[seed])
-    pair_plan = next(pipeline.assign_pairs(base_config, assignments))
-    logs = pipeline.run_pair(pair_plan)
+    cues_for_blocks: List[CueToggle] = [cue, *placebo_toggles]
+    placebo_names = [toggle.name for toggle in placebo_toggles]
+    block_defs = _blocks_for(case_identifier, model_id, cues_for_blocks, seeds=[seed], placebo_names=placebo_names)
+    assignments = blockwise_permutations(block_defs)
+    logs = []
+    for pair_plan in pipeline.assign_pairs(base_config, assignments):
+        logs.extend(pipeline.run_pair(pair_plan))
     for log in logs:
-        print(f"Trial {log.trial_id} produced {len(log.utterances)} utterances")
+        placebo_tag = " [placebo]" if log.is_placebo else ""
+        print(f"Trial {log.trial_id}{placebo_tag} produced {len(log.utterances)} utterances")
     if args.out:
         write_jsonl(logs, args.out)
 

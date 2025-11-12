@@ -22,7 +22,7 @@ flowchart TD
 
   subgraph Orchestration
     TP["bailiff/orchestration/pipeline.py<br/>TrialPipeline / PairPlan"]
-    RA["bailiff/orchestration/randomization.py<br/>blocked_permutations"]
+    RA["bailiff/orchestration/randomization.py<br/>blockwise_permutations"]
   end
 
   subgraph Core
@@ -100,7 +100,7 @@ flowchart LR
 - Add a new cue by extending `cue_catalog()` and referencing it in configs.
 
 ## Data Model (Key Fields)
-- Trial: `trial_id`, `case_identifier`, `model_identifier`, `cue_name`, `cue_condition` (control/treatment), `cue_value`, `seed`, `verdict`, `sentence`, `utterances[]`
+- Trial: `trial_id`, `case_identifier`, `model_identifier`, `cue_name`, `cue_condition` (control/treatment), `cue_value`, `block_key` (case×model), `is_placebo`, `seed`, `verdict`, `sentence`, `utterances[]`
 - Utterance: `role`, `phase`, `content`, `byte_count`, `token_count?`, `interruption?`, `objection_raised?`, `objection_ruling?`, `safety_triggered?`, `timestamp`, `tags[]`
 
 ## Event Tagging & Budgets
@@ -109,8 +109,8 @@ flowchart LR
 - Judge blinding hides cue information from judge prompts and redacts cue value in case text.
 
 ## Pairing & Randomization
-- `blocked_permutations()` yields control/treatment cue values per seed.
-- `TrialPipeline.assign_pairs()` stamps `cue_condition` and `cue_value` on `TrialConfig` objects and builds `PairPlan`.
+- `RandomizationBlock` + `blockwise_permutations()` describe case×model×cue blocks (including placebo toggles) and yield shuffled control/treatment assignments per seed.
+- `TrialPipeline.assign_pairs()`/`assign_blocked_pairs()` stamp `cue_condition`, `cue_value`, `block_key`, and placebo metadata on `TrialConfig` objects before building each `PairPlan`.
 - `TrialPipeline.run_pair()` executes both sessions and returns logs for downstream metrics.
 
 ## Metrics (Recap)
@@ -130,7 +130,7 @@ flowchart LR
 
 - Roles/Phases/State: `bailiff/core/config.py` defines `Role` (judge, prosecution, defense), `Phase` (opening → direct → cross → redirect → closing → verdict → audit), budgets, and `TrialConfig`.
 - Session Engine: `TrialSession` (core/session.py) advances phases, composes prompts, collects `UtteranceLog` records into a `TrialLog` using `default_log_factory`.
-- Randomization & Pairing: `blocked_permutations()` creates `PairAssignment`s. `TrialPipeline.assign_pairs()` yields `PairPlan`s where control/treatment differ only by cue value; seeds are tracked per pair.
+- Randomization & Pairing: `RandomizationBlock` + `blockwise_permutations()` create `PairAssignment`s per case×model block (including placebos). `TrialPipeline.assign_pairs()` stamps cue metadata, block keys, and placebo flags before yielding `PairPlan`s.
 - Agents & Prompts: `AgentSpec` composes a role system prompt with shared context and calls a pluggable backend (Echo/LLM). Canonical role prompts live in `bailiff/agents/prompts.py`.
 - Structured Logging: Each utterance captures role, phase, content bytes/tokens (token optional), flags for interruptions/objections/safety, timestamps, plus trial‑level metadata.
 

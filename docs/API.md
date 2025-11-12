@@ -8,13 +8,13 @@ This is a concise reference of the primary classes and functions. Import paths a
   - `AgentBudget(max_bytes, max_tokens=None, max_turns=None)`
   - `PhaseBudget(phase, max_messages=2, allow_interruptions=False)`
   - `CueToggle(name, control_value, treatment_value, metadata={})`
-  - `TrialConfig(case_template, cue, model_identifier, seed, agent_budgets, phase_budgets, ..., cue_condition=None, cue_value=None, judge_blinding=False)`
+  - `TrialConfig(case_template, cue, model_identifier, seed, agent_budgets, phase_budgets, ..., cue_condition=None, cue_value=None, block_key=None, is_placebo=False, judge_blinding=False)`
   - `DEFAULT_PHASE_ORDER: list[Phase]`
 - `bailiff.core.events`
   - `ObjectionRuling` — Enum
   - `EventTag(name, value=None)`
   - `UtteranceLog(role, phase, content, byte_count, token_count, addressed_to, timestamp, interruption=False, objection_raised=False, objection_ruling=None, safety_triggered=False, tags=[])`
-  - `TrialLog(trial_id, case_identifier, model_identifier, cue_name, cue_condition, cue_value, seed, started_at, completed_at, utterances=[], verdict=None, sentence=None, schema_version='0.1')`
+  - `TrialLog(trial_id, case_identifier, model_identifier, cue_name, cue_condition, cue_value, block_key, is_placebo, seed, started_at, completed_at, utterances=[], verdict=None, sentence=None, schema_version='0.1')`
 - `bailiff.core.logging`
   - `default_log_factory(config) -> TrialLog`
   - `mark_completed(log) -> None`
@@ -27,8 +27,11 @@ This is a concise reference of the primary classes and functions. Import paths a
 
 ## Orchestration
 - `bailiff.orchestration.randomization`
-  - `PairAssignment(seed, control_value, treatment_value)`
-  - `blocked_permutations(values, seeds) -> Iterator[PairAssignment]`
+  - `PairAssignment(seed, control_value, treatment_value, cue_name=None, block_key=None, ...)`
+  - `RandomizationBlock(case_identifier, model_identifier, cue_name, values, seeds, is_placebo=False)`
+  - `block_identifier(case_identifier, model_identifier) -> str`
+  - `blocked_permutations(values, seeds, *, cue_name=None, block_key=None, ...) -> Iterator[PairAssignment]`
+  - `blockwise_permutations(blocks) -> Iterator[PairAssignment]`
 - `bailiff.orchestration.pipeline`
   - `TrialPlan(config, cue_value)`
   - `PairPlan(control: TrialPlan, treatment: TrialPlan)`
@@ -36,6 +39,7 @@ This is a concise reference of the primary classes and functions. Import paths a
     - `.build_session(config) -> TrialSession`
     - `.run_pair(plan) -> list[TrialLog]`
     - `.assign_pairs(base_config, assignments) -> Iterator[PairPlan]`
+    - `.assign_blocked_pairs(block_configs, assignments) -> Iterator[PairPlan]`
 
 ## Agents
 - `bailiff.agents.base`
@@ -83,4 +87,3 @@ This is a concise reference of the primary classes and functions. Import paths a
   - `tost_log_odds(est, se, delta=0.1) -> (equivalent, p_lower, p_upper)`
   - `randomization_inference(stat_fn, y_control, y_treat, reps=1000, seed=123) -> float`
   - `wild_cluster_bootstrap(stat_fn, y_control, y_treat, reps=1000, seed=123) -> (p5, p95)`
-

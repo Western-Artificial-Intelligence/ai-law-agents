@@ -50,6 +50,8 @@ class TrialLog:
     cue_name: str
     cue_condition: Optional[str]
     cue_value: Optional[str]
+    block_key: Optional[str] = None
+    is_placebo: bool = False
     seed: int
     started_at: datetime
     completed_at: Optional[datetime]

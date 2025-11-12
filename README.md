@@ -4,7 +4,7 @@ This repository implements a reproducible harness for auditing fairness in inter
 
 ## Features
 - Multi‑agent trial simulation with roles: judge, prosecution, defense
-- Paired cue toggling (control/treatment) with blocked randomization
+- Paired cue toggling (control/treatment) with case×model blocked randomization plus placebo tagging in logs
 - Budgets/guards: per‑role byte caps, per‑phase message caps, judge blinding
 - Structured logs with event tags (objections, interruptions, safety)
 - Metrics: paired McNemar log‑odds, flip rate, byte share, measurement‑error correction, basic tone utilities
@@ -19,6 +19,7 @@ This repository implements a reproducible harness for auditing fairness in inter
    - Echo: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend echo --out trial_logs.jsonl`
    - Groq: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend groq --model llama3-8b-8192 --out trial_logs.jsonl`
    - Gemini: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend gemini --model gemini-1.5-flash --out trial_logs.jsonl`
+   - Add `--placebo <key>` (e.g., `name_placebo`) to schedule additional negative-control pairs if you are not using the sample YAML.
 
 ## Repository Layout
 - `bailiff/core`: State machine, config, logging, session engine, JSONL I/O
@@ -39,4 +40,3 @@ This repository implements a reproducible harness for auditing fairness in inter
 - How do I add a new case? Create a YAML under `bailiff/datasets/cases/` with `summary`, `facts`, `witnesses`, and `cue_slots`. See the user guide.
 - How do I add a cue? Extend `cue_catalog()` in `bailiff/datasets/templates.py`.
 - How do I analyze results? Export JSONL from the runner and follow the analysis examples in `docs/USER_GUIDE.md`.
-

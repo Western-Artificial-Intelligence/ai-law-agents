@@ -15,31 +15,63 @@ Paired mini-trials with LLM agents (judge, prosecution, defense) test whether to
 - Echo backend: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend echo --out trial_logs.jsonl`
 - Groq: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend groq --model llama3-8b-8192 --out trial_logs.jsonl`
 - Gemini: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend gemini --model gemini-1.5-flash --out trial_logs.jsonl`
+- To schedule extra placebo (negative-control) cues, add `--placebo <key>` on the CLI or list keys under `placebos:` in your YAML.
 
 ## Multi‑case loop (Python)
 ```python
 from pathlib import Path
-from bailiff.datasets.templates import cue_catalog
-from bailiff.orchestration.pipeline import TrialPipeline
-from bailiff.orchestration.randomization import blocked_permutations
-from bailiff.core.config import TrialConfig, AgentBudget, PhaseBudget, Phase, Role
 from bailiff.agents.base import AgentSpec
 from bailiff.agents.prompts import prompt_for
+from bailiff.core.config import AgentBudget, PhaseBudget, Phase, Role, TrialConfig
 from bailiff.core.io import write_jsonl
+from bailiff.datasets.templates import cue_catalog, placebo_catalog
+from bailiff.orchestration.pipeline import TrialPipeline
+from bailiff.orchestration.randomization import RandomizationBlock, block_identifier, blockwise_permutations
 from scripts.run_pilot_trial import EchoBackend
 
-cases = sorted(Path('bailiff/datasets/cases').glob('*.yaml'))
-cue = cue_catalog()['name_ethnicity']
-budgets = {Role.JUDGE: AgentBudget(1500), Role.PROSECUTION: AgentBudget(1800), Role.DEFENSE: AgentBudget(1800)}
+cases = sorted(Path("bailiff/datasets/cases").glob("*.yaml"))
+cue = cue_catalog()["name_ethnicity"]
+placebo = list(placebo_catalog())[0]
+budgets = {
+    Role.JUDGE: AgentBudget(1500),
+    Role.PROSECUTION: AgentBudget(1800),
+    Role.DEFENSE: AgentBudget(1800),
+}
 phase_budgets = [PhaseBudget(phase=p) for p in Phase]
 agents = {r: AgentSpec(role=r, system_prompt=prompt_for(r), backend=EchoBackend()) for r in Role}
 pipeline = TrialPipeline(agents)
 logs_all = []
 for i, case in enumerate(cases, 1):
-    base = TrialConfig(case, cue, 'echo', seed=1000+i, agent_budgets=budgets, phase_budgets=phase_budgets)
-    pair_plan = next(pipeline.assign_pairs(base, blocked_permutations([cue.control_value, cue.treatment_value], [base.seed])))
-    logs_all.extend(pipeline.run_pair(pair_plan))
-write_jsonl(logs_all, Path('multi_case_logs.jsonl'))
+    base = TrialConfig(
+        case_template=case,
+        cue=cue,
+        model_identifier="echo",
+        seed=1000 + i,
+        agent_budgets=budgets,
+        phase_budgets=phase_budgets,
+        negative_controls=(placebo,),
+        block_key=block_identifier(case.stem, "echo"),
+    )
+    blocks = [
+        RandomizationBlock(
+            case_identifier=case.stem,
+            model_identifier="echo",
+            cue_name=cue.name,
+            values=[cue.control_value, cue.treatment_value],
+            seeds=[base.seed],
+        ),
+        RandomizationBlock(
+            case_identifier=case.stem,
+            model_identifier="echo",
+            cue_name=placebo.name,
+            values=[placebo.control_value, placebo.treatment_value],
+            seeds=[base.seed],
+            is_placebo=True,
+        ),
+    ]
+    for plan in pipeline.assign_pairs(base, blockwise_permutations(blocks)):
+        logs_all.extend(pipeline.run_pair(plan))
+write_jsonl(logs_all, Path("multi_case_logs.jsonl"))
 ```
 
 ## Add a case
@@ -65,6 +97,7 @@ Edit `bailiff/datasets/templates.py` → `cue_catalog()` and add a `CueToggle` w
 Implement the callable protocol and plug into `AgentSpec` or use `GroqBackend`/`GeminiBackend` from `bailiff.agents.backends`.
 
 ## Basic analysis
+Each JSONL row includes `block_key` (case×model) and `is_placebo`. Filter on `is_placebo=False` when computing primary estimates.
 ```python
 from pathlib import Path
 import pandas as pd
@@ -85,4 +118,3 @@ if pairs:
     est, se = mcnemar_log_odds(pairs)
     print('log_odds=', est, 'se=', se)
 ```
-
