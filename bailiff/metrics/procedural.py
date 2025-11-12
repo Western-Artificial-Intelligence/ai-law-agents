@@ -96,3 +96,60 @@ def tone_gap(df: pd.DataFrame) -> Tuple[float, float]:
         raise ValueError("Tone gap requires exactly two cue conditions.")
     control, treatment = grouped.iloc[0], grouped.iloc[1]
     return float(control), float(treatment)
+
+
+@dataclass
+class CalibrationResult:
+    """Container describing measurement-error adjustments."""
+
+    alpha: float
+    beta: float
+    corrected_rate: float
+    alpha_ci: Tuple[float, float]
+    beta_ci: Tuple[float, float]
+    corrected_ci: Tuple[float, float]
+
+
+def measurement_error_calibration(
+    y_true: Iterable[int],
+    y_pred: Iterable[int],
+    observed_rate: float,
+    *,
+    reps: int = 1000,
+    seed: int | None = None,
+) -> CalibrationResult:
+    """Estimate (alpha, beta) and corrected rate with bootstrap uncertainty."""
+
+    true = np.asarray(list(y_true), dtype=int)
+    pred = np.asarray(list(y_pred), dtype=int)
+    if true.size == 0:
+        raise ValueError("At least one labeled example is required for calibration.")
+    alpha_hat, beta_hat = estimate_misclassification(true, pred)
+    corrected = correct_measurement(observed_rate, alpha_hat, beta_hat)
+    rng = np.random.default_rng(seed)
+    boot_alpha: list[float] = []
+    boot_beta: list[float] = []
+    boot_corrected: list[float] = []
+    n = true.size
+    reps = max(reps, 1)
+    for _ in range(reps):
+        idx = rng.integers(0, n, n)
+        sample_true = true[idx]
+        sample_pred = pred[idx]
+        a, b = estimate_misclassification(sample_true, sample_pred)
+        boot_alpha.append(a)
+        boot_beta.append(b)
+        boot_corrected.append(correct_measurement(observed_rate, a, b))
+
+    def _ci(samples: list[float]) -> Tuple[float, float]:
+        arr = np.asarray(samples)
+        return float(np.percentile(arr, 2.5)), float(np.percentile(arr, 97.5))
+
+    return CalibrationResult(
+        alpha=alpha_hat,
+        beta=beta_hat,
+        corrected_rate=corrected,
+        alpha_ci=_ci(boot_alpha),
+        beta_ci=_ci(boot_beta),
+        corrected_ci=_ci(boot_corrected),
+    )

@@ -141,3 +141,9 @@ if pairs:
     est, se = mcnemar_log_odds(pairs)
     print('log_odds=', est, 'se=', se)
 ```
+
+## Measurement-error calibration
+- Label a subset of procedural detections (e.g., objections) with ground truth.
+- Run the calibration CLI:  
+  `python scripts/run_measurement_calibration.py --labels calibration_labels.csv --true-column true --pred-column heuristic --observed-rate 0.37 --out calibration_summary.json`
+- The script bootstraps (configurable via `--bootstrap`) to report alpha (false-positive rate), beta (false-negative rate), and the corrected rate with 95% intervals.

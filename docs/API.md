@@ -86,6 +86,8 @@ This is a concise reference of the primary classes and functions. Import paths a
   - `aggregate_share(records) -> float`
   - `correct_measurement(mean_observed, alpha, beta) -> float`
   - `estimate_misclassification(y_true, y_pred) -> (alpha, beta)`
+  - `CalibrationResult(alpha, beta, corrected_rate, alpha_ci, beta_ci, corrected_ci)`
+  - `measurement_error_calibration(y_true, y_pred, observed_rate, reps=1000, seed=None) -> CalibrationResult`
   - `summarize_objections(df) -> pd.DataFrame`
   - `tone_gap(df) -> (control_mean, treatment_mean)`
 - `bailiff.metrics.tone`
