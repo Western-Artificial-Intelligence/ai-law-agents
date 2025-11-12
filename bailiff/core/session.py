@@ -3,14 +3,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Callable, Dict, Iterable, Optional, Tuple
+
+import json
+import re
+import yaml
 
 from .config import DEFAULT_PHASE_ORDER, Phase, PolicyViolation, Role, TrialConfig
 from .events import TrialLog, UtteranceLog
 from .logging import mark_completed
-from pathlib import Path
-import re
-import yaml
 
 AgentResponder = Callable[[Role, Phase, str], str]
 
@@ -208,6 +210,7 @@ class TrialSession:
     _SUSTAIN_RE = re.compile(r"\b(sustain|sustained)\b", re.IGNORECASE)
     _OVERRULE_RE = re.compile(r"\b(overrule|overruled)\b", re.IGNORECASE)
     _INTERRUPT_RE = re.compile(r"\b(interrupt|interruption)\b", re.IGNORECASE)
+    _JSON_OBJECT_RE = re.compile(r"\{.*?\}", re.DOTALL)
 
     def _apply_event_tagging(self, record: UtteranceLog) -> None:
         text = record.content
@@ -228,17 +231,67 @@ class TrialSession:
         judge_utts = [u for u in self._log.utterances if u.role is Role.JUDGE and u.phase is Phase.VERDICT]
         if not judge_utts:
             return
-        text = judge_utts[-1].content.lower()
-        verdict = None
+        latest = judge_utts[-1].content
+        verdict, sentence = self._parse_structured_verdict(latest)
+        lowered = latest.lower()
+        if verdict is None:
+            verdict = self._regex_verdict(lowered)
+        if verdict is not None:
+            self._log.verdict = verdict
+        if sentence is None:
+            sentence = self._regex_sentence(lowered)
+        if sentence is not None:
+            self._log.sentence = sentence
+
+    def _parse_structured_verdict(self, text: str) -> Tuple[Optional[str], Optional[str]]:
+        """Attempt to parse JSON verdicts emitted by the judge."""
+
+        for match in self._JSON_OBJECT_RE.finditer(text):
+            snippet = match.group(0)
+            try:
+                payload = json.loads(snippet)
+            except Exception:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            verdict = self._normalize_verdict(payload.get("verdict"))
+            sentence = self._stringify_sentence(payload.get("sentence"))
+            if verdict is not None or sentence is not None:
+                return verdict, sentence
+        return None, None
+
+    @staticmethod
+    def _normalize_verdict(value: object) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip().lower().replace(" ", "_")
+        if normalized in {"guilty", "not_guilty"}:
+            return normalized
+        return None
+
+    @staticmethod
+    def _stringify_sentence(value: object) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return str(value)
+        text = str(value).strip()
+        return text or None
+
+    @staticmethod
+    def _regex_verdict(text: str) -> Optional[str]:
         if "not guilty" in text:
-            verdict = "not_guilty"
-        elif "guilty" in text:
-            verdict = "guilty"
-        self._log.verdict = verdict
-        # sentence extraction placeholder: looks for "sentence" and a number
-        m = re.search(r"sentence[^0-9]*([0-9]+)", text)
-        if m:
-            self._log.sentence = m.group(1)
+            return "not_guilty"
+        if "guilty" in text:
+            return "guilty"
+        return None
+
+    @staticmethod
+    def _regex_sentence(text: str) -> Optional[str]:
+        match = re.search(r"sentence[^0-9]*([0-9]+)", text)
+        if match:
+            return match.group(1)
+        return None
 
     def _validate_role_for_phase(self, role: Role, phase: Phase) -> None:
         """NEW: Validate that a role is authorized to speak in the given phase.

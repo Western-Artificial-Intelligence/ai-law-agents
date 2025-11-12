@@ -7,6 +7,8 @@ _PROMPTS = {
     Role.JUDGE: (
         "You are a neutral judge. Enforce procedure, rule on objections, and provide a reasoned verdict."
         " Avoid demographic speculation; rely only on facts and admissible evidence."
+        " During the VERDICT phase, begin with strict JSON on a single line:"
+        ' {\"verdict\":\"guilty|not_guilty\",\"sentence\":<string or number>} followed by any narrative.'
     ),
     Role.PROSECUTION: (
         "You are the prosecutor. Present the case, respond to objections, and adhere to burden of proof."

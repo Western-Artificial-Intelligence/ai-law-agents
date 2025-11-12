@@ -34,7 +34,11 @@ Paired mini-trials with LLM agents (judge, prosecution, defense) test whether to
 - Batch configs support per-model (or global) `backend_policy` blocks with the same keys; parameters are logged in each `TrialLog`.
 - Backend parameters (e.g., `temperature`) can be supplied via `backend_params` in YAML (or repeated `--backend-param key=value` flags) and are recorded in `model_parameters`.
 
-## Multi‑case loop (Python)
+## Structured verdict output
+- The judge prompt now requires the VERDICT phase to start with JSON `{"verdict":"guilty|not_guilty","sentence":<value>}` before any prose.
+- `TrialSession` extracts the JSON when present and falls back to the legacy keyword/regex parsing so older logs stay compatible.
+
+## Multi-case loop (Python)
 ```python
 from pathlib import Path
 from bailiff.agents.base import AgentSpec
