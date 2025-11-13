@@ -70,8 +70,7 @@ class TrialSession:
             for _ in range(max_msgs):
                 content = self._emit(role, phase)
                 # Enforce byte/token budgets per role by truncation
-                content = self._apply_byte_budget(role, content)
-                content, token_count = self._apply_token_budget(role, content)
+                content, token_count = self._apply_role_budgets(role, content)
                 record = self._build_record(role, phase, content, token_count)
                 self._apply_event_tagging(record)
                 
@@ -172,6 +171,13 @@ class TrialSession:
         return rec
 
     # --- Helpers ---
+    def _apply_role_budgets(self, role: Role, content: str) -> Tuple[str, int]:
+        """Apply byte and token caps in sequence and return (content, tokens)."""
+
+        content = self._apply_byte_budget(role, content)
+        content, token_count = self._apply_token_budget(role, content)
+        return content, token_count
+
     def _apply_byte_budget(self, role: Role, content: str) -> str:
         budget = self.config.budget_for(role)
         current = self._bytes_used.get(role, 0)

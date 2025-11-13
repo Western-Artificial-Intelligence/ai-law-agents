@@ -42,6 +42,5 @@ analysis = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["bailiff*"]
-
 [project.scripts]
 bailiff-e2e-echo = "bailiff.cli:e2e_echo_main"
