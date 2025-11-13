@@ -56,15 +56,18 @@ This is a concise reference of the primary classes and functions. Import paths a
 - `bailiff.agents.base`
   - `RetryPolicy(max_retries=2, initial_backoff=1.0, backoff_multiplier=2.0, timeout_seconds=30.0, rate_limit_seconds=0.0)`
   - `BackendTimeoutError`
-  - `AgentBackend` — callable protocol `__call__(prompt, **kwargs) -> str`
+  - `AgentBackend` - callable protocol `__call__(prompt, **kwargs) -> str`
   - `AgentSpec(role, system_prompt, backend, default_params=None, retry_policy=RetryPolicy())`
     - `.to_responder() -> Callable[[Role, Phase, str], str]`
   - `build_responder_map(specs) -> dict[Role, Callable]`
 - `bailiff.agents.prompts`
   - `prompt_for(role) -> str`
 - `bailiff.agents.backends`
-  - `GroqBackend(model, api_key=None)` — requires `groq` package
-  - `GeminiBackend(model, api_key=None)` — requires `google-generativeai`
+  - `GroqBackend(model, api_key=None)` - requires `groq` package
+  - `GeminiBackend(model, api_key=None)` - requires `google-generativeai`
+- `bailiff.agents.backends_local`
+  - `LocalTransformersBackend(model_name_or_path, device=None, max_new_tokens=256, temperature=0.2, top_p=0.95)`
+  - `LlamaCppBackend(model_path, n_ctx=2048, n_threads=None, max_tokens=256, temperature=0.2, top_p=0.95)`
 
 ## Datasets
 - `bailiff.datasets.templates`

@@ -28,6 +28,7 @@ Paired mini-trials with LLM agents (judge, prosecution, defense) test whether to
 - Every log row follows `bailiff/schemas/trial_log.schema.json` (schema version recorded in `schema_version`).
 - Validation runs automatically whenever `write_jsonl`/`append_jsonl` are called. Set `BAILIFF_VALIDATE_LOGS=0` to disable (e.g., for very large batches).
 - Validation failures raise a `jsonschema.ValidationError` highlighting the offending field.
+- Each `UtteranceLog` now records `token_count` alongside `byte_count`, and `max_tokens` in `AgentBudget` clips agent outputs before they are logged.
 
 ## Backend retry policy
 - `scripts/run_pilot_trial.py` exposes `--timeout-seconds`, `--max-retries`, `--backoff-seconds`, `--backoff-multiplier`, and `--rate-limit-seconds` plus YAML overrides under `backend_policy`.
@@ -35,8 +36,36 @@ Paired mini-trials with LLM agents (judge, prosecution, defense) test whether to
 - Backend parameters (e.g., `temperature`) can be supplied via `backend_params` in YAML (or repeated `--backend-param key=value` flags) and are recorded in `model_parameters`.
 
 ## Structured verdict output
+<<<<<<< HEAD
 - The judge prompt now requires the VERDICT phase to start with JSON `{"verdict":"guilty|not_guilty","sentence":<value>}` before any prose.
 - `TrialSession` extracts the JSON when present and falls back to the legacy keyword/regex parsing so older logs stay compatible.
+=======
+- The judge prompt now requires the VERDICT phase to start with JSON {"verdict":"guilty|not_guilty","sentence":<value>} before any prose.
+- Judge agents must start every VERDICT-phase utterance with a JSON object such as {"verdict": "guilty", "sentence": 24} so _parse_and_set_verdict_sentence() can populate TrialLog.verdict/sentence.
+- TrialSession extracts the JSON when present and falls back to the legacy keyword/regex parsing so older logs stay compatible.
+
+## Local backend options
+- Use --backend local for offline inference. It defaults to Hugging Face transformers; provide --backend-param model_name=<hf-id> (and optional --backend-param device=cuda:0) to select the checkpoint/device.
+- Switch to llama.cpp by adding --backend-param provider=llama_cpp --backend-param model_path=/path/to/model.gguf plus optional --backend-param n_ctx=4096 --backend-param n_threads=8.
+- Batch configs can mix and match:
+
+`yaml
+models:
+  - backend: local
+    model: distilgpt2
+    params:
+      provider: transformers
+      model_name: distilgpt2
+      temperature: 0.4
+  - backend: local
+    model: models/llama-3b.gguf
+    params:
+      provider: llama_cpp
+      model_path: models/llama-3b.gguf
+      n_ctx: 4096
+      n_threads: 8
+`
+>>>>>>> main
 
 ## Multi-case loop (Python)
 ```python
@@ -54,9 +83,9 @@ cases = sorted(Path("bailiff/datasets/cases").glob("*.yaml"))
 cue = cue_catalog()["name_ethnicity"]
 placebo = list(placebo_catalog())[0]
 budgets = {
-    Role.JUDGE: AgentBudget(1500),
-    Role.PROSECUTION: AgentBudget(1800),
-    Role.DEFENSE: AgentBudget(1800),
+    Role.JUDGE: AgentBudget(max_bytes=1500, max_tokens=600),
+    Role.PROSECUTION: AgentBudget(max_bytes=1800, max_tokens=700),
+    Role.DEFENSE: AgentBudget(max_bytes=1800, max_tokens=700),
 }
 phase_budgets = [PhaseBudget(phase=p) for p in Phase]
 agents = {r: AgentSpec(role=r, system_prompt=prompt_for(r), backend=EchoBackend()) for r in Role}

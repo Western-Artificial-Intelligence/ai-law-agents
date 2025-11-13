@@ -77,11 +77,11 @@ class TrialConfig:
     case_template: Path
     cue: CueToggle
     model_identifier: str
-    backend_name: Optional[str] = None
-    model_parameters: Mapping[str, object] = field(default_factory=dict)
     seed: int
     agent_budgets: Mapping[Role, AgentBudget]
     phase_budgets: Sequence[PhaseBudget]
+    backend_name: Optional[str] = None
+    model_parameters: Mapping[str, object] = field(default_factory=dict)
     negative_controls: Sequence[CueToggle] = field(default_factory=tuple)
     # Active cue assignment details (set by orchestration when pairing)
     cue_condition: Optional[str] = None  # "control" | "treatment"
