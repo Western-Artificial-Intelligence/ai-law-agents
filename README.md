@@ -5,7 +5,7 @@ This repository implements a reproducible harness for auditing fairness in inter
 ## Features
 - Multi‑agent trial simulation with roles: judge, prosecution, defense
 - Paired cue toggling (control/treatment) with case×model blocked randomization plus placebo tagging in logs
-- Budgets/guards: per‑role byte caps, per‑phase message caps, judge blinding
+- Budgets/guards: per-role byte & token caps, per-phase message caps, judge blinding
 - Structured logs with event tags (objections, interruptions, safety)
 - Metrics: paired McNemar log‑odds, flip rate, byte share, measurement‑error correction, basic tone utilities
 - Extensible backends: Echo (offline), Groq, Gemini; open‑source adapters are easy to add

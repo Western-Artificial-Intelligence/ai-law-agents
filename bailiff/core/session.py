@@ -3,14 +3,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Callable, Dict, Iterable, Optional, Tuple
+
+import re
+import yaml
 
 from .config import DEFAULT_PHASE_ORDER, Phase, PolicyViolation, Role, TrialConfig
 from .events import TrialLog, UtteranceLog
 from .logging import mark_completed
-from pathlib import Path
-import re
-import yaml
+from .tokenizer import Tokenizer
 
 AgentResponder = Callable[[Role, Phase, str], str]
 
@@ -25,7 +27,9 @@ class TrialSession:
     policy_hooks: Optional[Dict[str, Callable[[TrialLog], None]]] = None
     _log: Optional[TrialLog] = field(default=None, init=False, repr=False)
     _bytes_used: Dict[Role, int] = field(default_factory=dict, init=False, repr=False)
+    _tokens_used: Dict[Role, int] = field(default_factory=dict, init=False, repr=False)
     _case_text: Optional[str] = field(default=None, init=False, repr=False)
+    _tokenizer: Optional[Tokenizer] = field(default=None, init=False, repr=False)
 
     def run(self) -> TrialLog:
         """Execute the state machine and return the populated trial log."""
@@ -39,6 +43,8 @@ class TrialSession:
 
         self._log = self.log_factory(self.config)
         self._bytes_used = {role: 0 for role in Role}
+        self._tokens_used = {role: 0 for role in Role}
+        self._tokenizer = Tokenizer(self.config.model_identifier)
         self._case_text = self._load_and_render_case()
         for phase in DEFAULT_PHASE_ORDER:
             self._run_phase(phase)
@@ -62,9 +68,10 @@ class TrialSession:
             max_msgs = max(1, pb.max_messages)
             for _ in range(max_msgs):
                 content = self._emit(role, phase)
-                # Enforce byte budget per role by truncation
+                # Enforce byte/token budgets per role by truncation
                 content = self._apply_byte_budget(role, content)
-                record = self._build_record(role, phase, content)
+                content, token_count = self._apply_token_budget(role, content)
+                record = self._build_record(role, phase, content, token_count)
                 self._apply_event_tagging(record)
                 
                 # NEW: Enforce interruption policy based on phase configuration
@@ -149,7 +156,7 @@ class TrialSession:
             f"Role: {role.value}"
         )
 
-    def _build_record(self, role: Role, phase: Phase, content: str) -> UtteranceLog:
+    def _build_record(self, role: Role, phase: Phase, content: str, token_count: int) -> UtteranceLog:
         """Create a minimal log entry for downstream metric extraction."""
 
         rec = UtteranceLog(
@@ -157,7 +164,7 @@ class TrialSession:
             phase=phase,
             content=content,
             byte_count=len(content.encode("utf-8")),
-            token_count=None,
+            token_count=token_count,
             addressed_to=None,
             timestamp=datetime.utcnow(),
         )
@@ -175,6 +182,26 @@ class TrialSession:
         used = len(content.encode("utf-8"))
         self._bytes_used[role] = current + used
         return content
+
+    def _apply_token_budget(self, role: Role, content: str) -> Tuple[str, int]:
+        """Clip content to remaining token budget and record usage."""
+
+        if self._tokenizer is None:
+            self._tokenizer = Tokenizer(self.config.model_identifier)
+        budget = self.config.budget_for(role)
+        used = self._tokens_used.get(role, 0)
+        max_tokens = budget.max_tokens
+        if max_tokens is None:
+            tokens = self._tokenizer.count(content)
+            self._tokens_used[role] = used + tokens
+            return content, tokens
+        remaining = max(0, max_tokens - used)
+        if remaining == 0:
+            self._tokens_used[role] = used
+            return "", 0
+        clipped, tokens = self._tokenizer.clip(content, remaining)
+        self._tokens_used[role] = used + tokens
+        return clipped, tokens
 
     def _load_and_render_case(self) -> str:
         path = Path(self.config.case_template)

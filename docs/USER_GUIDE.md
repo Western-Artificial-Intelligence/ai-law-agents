@@ -28,6 +28,7 @@ Paired mini-trials with LLM agents (judge, prosecution, defense) test whether to
 - Every log row follows `bailiff/schemas/trial_log.schema.json` (schema version recorded in `schema_version`).
 - Validation runs automatically whenever `write_jsonl`/`append_jsonl` are called. Set `BAILIFF_VALIDATE_LOGS=0` to disable (e.g., for very large batches).
 - Validation failures raise a `jsonschema.ValidationError` highlighting the offending field.
+- Each `UtteranceLog` now records `token_count` alongside `byte_count`, and `max_tokens` in `AgentBudget` clips agent outputs before they are logged.
 
 ## Backend retry policy
 - `scripts/run_pilot_trial.py` exposes `--timeout-seconds`, `--max-retries`, `--backoff-seconds`, `--backoff-multiplier`, and `--rate-limit-seconds` plus YAML overrides under `backend_policy`.
@@ -50,9 +51,9 @@ cases = sorted(Path("bailiff/datasets/cases").glob("*.yaml"))
 cue = cue_catalog()["name_ethnicity"]
 placebo = list(placebo_catalog())[0]
 budgets = {
-    Role.JUDGE: AgentBudget(1500),
-    Role.PROSECUTION: AgentBudget(1800),
-    Role.DEFENSE: AgentBudget(1800),
+    Role.JUDGE: AgentBudget(max_bytes=1500, max_tokens=600),
+    Role.PROSECUTION: AgentBudget(max_bytes=1800, max_tokens=700),
+    Role.DEFENSE: AgentBudget(max_bytes=1800, max_tokens=700),
 }
 phase_budgets = [PhaseBudget(phase=p) for p in Phase]
 agents = {r: AgentSpec(role=r, system_prompt=prompt_for(r), backend=EchoBackend()) for r in Role}
