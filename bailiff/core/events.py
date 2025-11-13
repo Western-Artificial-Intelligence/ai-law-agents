@@ -48,16 +48,16 @@ class TrialLog:
     trial_id: str
     case_identifier: str
     model_identifier: str
-    backend_name: Optional[str] = None
-    model_parameters: Dict[str, object] = field(default_factory=dict)
     cue_name: str
     cue_condition: Optional[str]
     cue_value: Optional[str]
-    block_key: Optional[str] = None
-    is_placebo: bool = False
     seed: int
     started_at: datetime
     completed_at: Optional[datetime]
+    backend_name: Optional[str] = None
+    model_parameters: Dict[str, object] = field(default_factory=dict)
+    block_key: Optional[str] = None
+    is_placebo: bool = False
     utterances: List[UtteranceLog] = field(default_factory=list)
     verdict: Optional[str] = None
     sentence: Optional[str] = None
