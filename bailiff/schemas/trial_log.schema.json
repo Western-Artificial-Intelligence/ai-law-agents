@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bailiff.ai/schemas/trial_log.schema.json",
+  "title": "TrialLog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "trial_id",
+    "case_identifier",
+    "model_identifier",
+    "backend_name",
+    "model_parameters",
+    "cue_name",
+    "cue_condition",
+    "cue_value",
+    "block_key",
+    "is_placebo",
+    "seed",
+    "started_at",
+    "completed_at",
+    "utterances",
+    "schema_version"
+  ],
+  "properties": {
+    "trial_id": {"type": "string"},
+    "case_identifier": {"type": "string"},
+    "model_identifier": {"type": "string"},
+    "cue_name": {"type": "string"},
+    "backend_name": {"type": ["string", "null"]},
+    "model_parameters": {"type": "object", "additionalProperties": true},
+    "cue_condition": {
+      "enum": ["control", "treatment", null]
+    },
+    "cue_value": {"type": ["string", "null"]},
+    "block_key": {"type": ["string", "null"]},
+    "is_placebo": {"type": "boolean"},
+    "seed": {"type": "integer"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": ["string", "null"], "format": "date-time"},
+    "verdict": {"type": ["string", "null"]},
+    "sentence": {"type": ["string", "null"]},
+    "schema_version": {"const": "0.3"},
+    "notes": {"type": ["string", "null"]},
+    "utterances": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/utterance"}
+    }
+  },
+  "$defs": {
+    "utterance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "phase",
+        "content",
+        "byte_count",
+        "token_count",
+        "addressed_to",
+        "timestamp",
+        "interruption",
+        "objection_raised",
+        "objection_ruling",
+        "safety_triggered",
+        "tags"
+      ],
+      "properties": {
+        "role": {"$ref": "#/$defs/role"},
+        "phase": {"$ref": "#/$defs/phase"},
+        "content": {"type": "string"},
+        "byte_count": {"type": "integer", "minimum": 0},
+        "token_count": {"type": ["integer", "null"], "minimum": 0},
+        "addressed_to": {"type": ["string", "null"], "anyOf": [{"$ref": "#/$defs/role"}, {"type": "null"}]},
+        "timestamp": {"type": "string", "format": "date-time"},
+        "interruption": {"type": "boolean"},
+        "objection_raised": {"type": "boolean"},
+        "objection_ruling": {
+          "enum": ["sustained", "overruled", null]
+        },
+        "safety_triggered": {"type": "boolean"},
+        "tags": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/event_tag"}
+        }
+      }
+    },
+    "event_tag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string"},
+        "value": {"type": ["string", "null"]}
+      }
+    },
+    "role": {
+      "enum": ["judge", "prosecution", "defense"]
+    },
+    "phase": {
+      "enum": ["opening", "direct", "cross", "redirect", "closing", "verdict", "audit"]
+    }
+  }
+}

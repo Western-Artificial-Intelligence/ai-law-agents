@@ -4,9 +4,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from .config import Phase, Role
+from .schema import SCHEMA_VERSION
 
 
 class ObjectionRuling(str, Enum):
@@ -30,9 +31,9 @@ class UtteranceLog:
     phase: Phase
     content: str
     byte_count: int
-    token_count: Optional[int]
-    addressed_to: Optional[Role]
     timestamp: datetime
+    token_count: int = 0
+    addressed_to: Optional[Role] = None
     interruption: bool = False
     objection_raised: bool = False
     objection_ruling: Optional[ObjectionRuling] = None
@@ -53,10 +54,14 @@ class TrialLog:
     seed: int
     started_at: datetime
     completed_at: Optional[datetime]
+    backend_name: Optional[str] = None
+    model_parameters: Dict[str, object] = field(default_factory=dict)
+    block_key: Optional[str] = None
+    is_placebo: bool = False
     utterances: List[UtteranceLog] = field(default_factory=list)
     verdict: Optional[str] = None
     sentence: Optional[str] = None
-    schema_version: str = "0.1"
+    schema_version: str = SCHEMA_VERSION
 
     def append(self, record: UtteranceLog) -> None:
         """Append an utterance record to the log."""

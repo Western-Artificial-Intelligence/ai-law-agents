@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Mapping
+
+import yaml
 
 from bailiff.core.config import CueToggle
 
@@ -59,3 +61,46 @@ def placebo_catalog() -> Iterable[CueToggle]:
         metadata={"type": "name", "class": "neutral"},
     )
 
+
+def load_case_templates(root: Path) -> List[CaseTemplate]:
+    """Enumerate and validate case YAML files under a directory."""
+
+    root = Path(root)
+    if not root.exists():
+        raise FileNotFoundError(f"Case root does not exist: {root}")
+    cases: List[CaseTemplate] = []
+    for path in sorted(root.glob("*.yaml")):
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        _validate_case_payload(data, path)
+        cases.append(
+            CaseTemplate(
+                identifier=str(data["identifier"]),
+                description=str(data.get("summary", "")),
+                template_path=path,
+            )
+        )
+    if not cases:
+        raise FileNotFoundError(f"No case YAML files found under {root}")
+    return cases
+
+
+_REQUIRED_CASE_KEYS = ("identifier", "summary", "charges", "facts", "witnesses", "cue_slots")
+
+
+def _validate_case_payload(data: Mapping[str, Any], path: Path) -> None:
+    missing = [key for key in _REQUIRED_CASE_KEYS if key not in data]
+    if missing:
+        raise ValueError(f"{path}: missing required keys {missing}")
+    if not isinstance(data["charges"], list) or not data["charges"]:
+        raise ValueError(f"{path}: 'charges' must be a non-empty list")
+    if not isinstance(data["facts"], list) or not data["facts"]:
+        raise ValueError(f"{path}: 'facts' must be a non-empty list")
+    witnesses = data["witnesses"]
+    if not isinstance(witnesses, Mapping):
+        raise ValueError(f"{path}: 'witnesses' must be a mapping with prosecution/defense lists")
+    cues = data["cue_slots"]
+    if not isinstance(cues, Mapping) or not cues:
+        raise ValueError(f"{path}: 'cue_slots' must be a non-empty mapping")
+    missing_cue_tokens = [slot for slot, value in cues.items() if "{{ cue_value }}" not in str(value)]
+    if missing_cue_tokens:
+        raise ValueError(f"{path}: cue slots {missing_cue_tokens} must include '{{{{ cue_value }}}}' placeholder")

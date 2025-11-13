@@ -17,12 +17,14 @@ dependencies = [
   "pandas>=2.0",
   "scipy>=1.10",
   "statsmodels>=0.14",
+  "jsonschema>=4.21",
   "pydantic>=2.5",
   "pydantic-settings>=2.1",
   "pyyaml>=6.0",
   "python-dotenv>=1.0",
   "tqdm>=4.66",
-  "scikit-learn>=1.3"
+  "scikit-learn>=1.3",
+  "tiktoken>=0.7"
 ]
 
 [project.optional-dependencies]
@@ -41,6 +43,5 @@ analysis = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["bailiff*"]
-
 [project.scripts]
 bailiff-e2e-echo = "bailiff.cli:e2e_echo_main"

@@ -1,16 +1,19 @@
 """Session orchestration for multi-agent trials."""
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Callable, Dict, Iterable, Optional, Tuple
+
+import re
+import yaml
 
 from .config import DEFAULT_PHASE_ORDER, Phase, PolicyViolation, Role, TrialConfig
 from .events import TrialLog, UtteranceLog
 from .logging import mark_completed
-from pathlib import Path
-import re
-import yaml
+from .tokenizer import Tokenizer
 
 AgentResponder = Callable[[Role, Phase, str], str]
 
@@ -25,7 +28,13 @@ class TrialSession:
     policy_hooks: Optional[Dict[str, Callable[[TrialLog], None]]] = None
     _log: Optional[TrialLog] = field(default=None, init=False, repr=False)
     _bytes_used: Dict[Role, int] = field(default_factory=dict, init=False, repr=False)
+    _tokens_used: Dict[Role, int] = field(default_factory=dict, init=False, repr=False)
     _case_text: Optional[str] = field(default=None, init=False, repr=False)
+    _tokenizer: Optional[Tokenizer] = field(default=None, init=False, repr=False)
+
+    def run(self) -> TrialLog:
+        """Execute the state machine and return the populated trial log."""
+
     # NEW: Tracks count of each type of policy violation during trial execution
     # Format: {"interruption_not_allowed": 2, "judge_cue_exposure": 1}
     _policy_violations: Dict[str, int] = field(default_factory=dict, init=False, repr=False)
@@ -35,6 +44,8 @@ class TrialSession:
 
         self._log = self.log_factory(self.config)
         self._bytes_used = {role: 0 for role in Role}
+        self._tokens_used = {role: 0 for role in Role}
+        self._tokenizer = Tokenizer(self.config.model_identifier)
         self._case_text = self._load_and_render_case()
         for phase in DEFAULT_PHASE_ORDER:
             self._run_phase(phase)
@@ -58,9 +69,9 @@ class TrialSession:
             max_msgs = max(1, pb.max_messages)
             for _ in range(max_msgs):
                 content = self._emit(role, phase)
-                # Enforce byte budget per role by truncation
-                content = self._apply_byte_budget(role, content)
-                record = self._build_record(role, phase, content)
+                # Enforce byte/token budgets per role by truncation
+                content, token_count = self._apply_role_budgets(role, content)
+                record = self._build_record(role, phase, content, token_count)
                 self._apply_event_tagging(record)
                 
                 # NEW: Enforce interruption policy based on phase configuration
@@ -93,6 +104,10 @@ class TrialSession:
         responder = self.responders[role]
         prompt = self._build_prompt(role, phase)
         return responder(role, phase, prompt)
+
+    def _build_prompt(self, role: Role, phase: Phase) -> str:
+        """Construct the shared prompt context passed to an agent responder."""
+
 
     def _build_prompt(self, role: Role, phase: Phase) -> str:
         """Construct the shared prompt context passed to an agent responder.
@@ -141,7 +156,7 @@ class TrialSession:
             f"Role: {role.value}"
         )
 
-    def _build_record(self, role: Role, phase: Phase, content: str) -> UtteranceLog:
+    def _build_record(self, role: Role, phase: Phase, content: str, token_count: int) -> UtteranceLog:
         """Create a minimal log entry for downstream metric extraction."""
 
         rec = UtteranceLog(
@@ -149,13 +164,20 @@ class TrialSession:
             phase=phase,
             content=content,
             byte_count=len(content.encode("utf-8")),
-            token_count=None,
+            token_count=token_count,
             addressed_to=None,
             timestamp=datetime.utcnow(),
         )
         return rec
 
     # --- Helpers ---
+    def _apply_role_budgets(self, role: Role, content: str) -> Tuple[str, int]:
+        """Apply byte and token caps in sequence and return (content, tokens)."""
+
+        content = self._apply_byte_budget(role, content)
+        content, token_count = self._apply_token_budget(role, content)
+        return content, token_count
+
     def _apply_byte_budget(self, role: Role, content: str) -> str:
         budget = self.config.budget_for(role)
         current = self._bytes_used.get(role, 0)
@@ -167,6 +189,26 @@ class TrialSession:
         used = len(content.encode("utf-8"))
         self._bytes_used[role] = current + used
         return content
+
+    def _apply_token_budget(self, role: Role, content: str) -> Tuple[str, int]:
+        """Clip content to remaining token budget and record usage."""
+
+        if self._tokenizer is None:
+            self._tokenizer = Tokenizer(self.config.model_identifier)
+        budget = self.config.budget_for(role)
+        used = self._tokens_used.get(role, 0)
+        max_tokens = budget.max_tokens
+        if max_tokens is None:
+            tokens = self._tokenizer.count(content)
+            self._tokens_used[role] = used + tokens
+            return content, tokens
+        remaining = max(0, max_tokens - used)
+        if remaining == 0:
+            self._tokens_used[role] = used
+            return "", 0
+        clipped, tokens = self._tokenizer.clip(content, remaining)
+        self._tokens_used[role] = used + tokens
+        return clipped, tokens
 
     def _load_and_render_case(self) -> str:
         path = Path(self.config.case_template)
@@ -200,6 +242,7 @@ class TrialSession:
     _SUSTAIN_RE = re.compile(r"\b(sustain|sustained)\b", re.IGNORECASE)
     _OVERRULE_RE = re.compile(r"\b(overrule|overruled)\b", re.IGNORECASE)
     _INTERRUPT_RE = re.compile(r"\b(interrupt|interruption)\b", re.IGNORECASE)
+    _JSON_OBJECT_RE = re.compile(r"(\{.*?\})", re.DOTALL)
 
     def _apply_event_tagging(self, record: UtteranceLog) -> None:
         text = record.content
@@ -216,21 +259,15 @@ class TrialSession:
 
     def _parse_and_set_verdict_sentence(self) -> None:
         assert self._log is not None
-        # naive parse from latest judge utterance in VERDICT phase
         judge_utts = [u for u in self._log.utterances if u.role is Role.JUDGE and u.phase is Phase.VERDICT]
         if not judge_utts:
             return
-        text = judge_utts[-1].content.lower()
-        verdict = None
-        if "not guilty" in text:
-            verdict = "not_guilty"
-        elif "guilty" in text:
-            verdict = "guilty"
-        self._log.verdict = verdict
-        # sentence extraction placeholder: looks for "sentence" and a number
-        m = re.search(r"sentence[^0-9]*([0-9]+)", text)
-        if m:
-            self._log.sentence = m.group(1)
+        text = judge_utts[-1].content
+        verdict, sentence = self._extract_verdict_fields(text)
+        if verdict:
+            self._log.verdict = verdict
+        if sentence is not None:
+            self._log.sentence = sentence
 
     def _validate_role_for_phase(self, role: Role, phase: Phase) -> None:
         """NEW: Validate that a role is authorized to speak in the given phase.
@@ -293,7 +330,7 @@ class TrialSession:
 
     def get_policy_violations(self) -> Dict[str, int]:
         """NEW: Return recorded policy violations for testing and audit.
-        
+
         Returns a copy of the violation counter dictionary. Can be used to verify
         that policies were enforced correctly during trial execution.
         
@@ -301,5 +338,79 @@ class TrialSession:
             Dict mapping violation type strings to count of occurrences.
             Example: {"interruption_not_allowed": 3, "judge_cue_exposure": 1}
         """
-        
+
         return self._policy_violations.copy()
+
+    @staticmethod
+    def _extract_verdict_fields(text: str) -> Tuple[Optional[str], Optional[str]]:
+        """Parse structured JSON if present, otherwise fall back to regex heuristics."""
+
+        verdict, sentence = TrialSession._parse_structured_verdict(text)
+        if verdict is None:
+            verdict = TrialSession._regex_verdict(text)
+        if sentence is None:
+            sentence = TrialSession._regex_sentence(text)
+        return verdict, sentence
+
+    @staticmethod
+    def _parse_structured_verdict(text: str) -> Tuple[Optional[str], Optional[str]]:
+        """Attempt to parse a JSON object containing verdict/sentence fields."""
+
+        for blob in TrialSession._json_candidates(text):
+            try:
+                data = json.loads(blob)
+            except json.JSONDecodeError:
+                continue
+            verdict = TrialSession._normalize_verdict(data.get("verdict"))
+            sentence_raw = data.get("sentence")
+            sentence = None
+            if sentence_raw is not None:
+                sentence = str(sentence_raw).strip()
+                if sentence == "":
+                    sentence = None
+            if verdict is not None or sentence is not None:
+                return verdict, sentence
+        return None, None
+
+    @staticmethod
+    def _json_candidates(text: str) -> Iterable[str]:
+        """Yield candidate JSON substrings from the judge response."""
+
+        stripped = text.strip()
+        seen = set()
+        if stripped.startswith("{") and stripped.endswith("}"):
+            seen.add(stripped)
+            yield stripped
+        for match in TrialSession._JSON_OBJECT_RE.finditer(text):
+            candidate = match.group(1).strip()
+            if candidate and candidate not in seen:
+                seen.add(candidate)
+                yield candidate
+
+    @staticmethod
+    def _normalize_verdict(value: object) -> Optional[str]:
+        """Normalize verdict strings onto expected enum-style labels."""
+
+        if not isinstance(value, str):
+            return None
+        normalized = value.strip().lower().replace(" ", "_")
+        valid = {"guilty", "not_guilty"}
+        return normalized if normalized in valid else None
+
+    @staticmethod
+    def _regex_verdict(text: str) -> Optional[str]:
+        """Fallback heuristic verdict parser using plain text."""
+
+        lowered = text.lower()
+        if "not guilty" in lowered:
+            return "not_guilty"
+        if "guilty" in lowered:
+            return "guilty"
+        return None
+
+    @staticmethod
+    def _regex_sentence(text: str) -> Optional[str]:
+        """Fallback heuristic for extracting a numeric sentence length."""
+
+        match = re.search(r"sentence[^0-9]*([0-9]+)", text, re.IGNORECASE)
+        return match.group(1) if match else None
