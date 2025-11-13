@@ -159,7 +159,8 @@ def build_case_specs(cfg: dict) -> List[CaseSpec]:
     return cases
 
 
-def load_backend(backend: str, model: str):
+def load_backend(backend: str, model: str, params: Optional[Dict[str, object]] = None):
+    runtime_params = params or {}
     if backend == "echo":
         class EchoBackend:
             def __call__(self, prompt: str, **_: object) -> str:
@@ -178,17 +179,37 @@ def load_backend(backend: str, model: str):
         except Exception as exc:  # pragma: no cover
             raise BackendUnavailable(f"Gemini backend unavailable: {exc}") from exc
         return GeminiBackend(model=model)
+    if backend == "local":
+        try:
+            from bailiff.agents.backends_local import LlamaCppBackend, LocalTransformersBackend  # type: ignore
+        except Exception as exc:  # pragma: no cover
+            raise BackendUnavailable(f"Local backend unavailable: {exc}") from exc
+        provider = str(runtime_params.pop("provider", "transformers")).lower()
+        if provider == "llama_cpp":
+            model_path = str(runtime_params.pop("model_path", model))
+            if not model_path:
+                raise BackendUnavailable("model_path is required for llama_cpp local backend.")
+            n_ctx = int(runtime_params.pop("n_ctx", 2048))
+            n_threads_value = runtime_params.pop("n_threads", None)
+            n_threads = int(n_threads_value) if n_threads_value is not None else None
+            return LlamaCppBackend(model_path=model_path, n_ctx=n_ctx, n_threads=n_threads)
+        model_name = str(runtime_params.pop("model_name", model))
+        if not model_name:
+            raise BackendUnavailable("model_name is required for transformers local backend.")
+        device = runtime_params.pop("device", None)
+        return LocalTransformersBackend(model_name_or_path=model_name, device=device)
     raise BackendUnavailable(f"Unsupported backend choice: {backend}")
 
 
 def build_pipeline(model: ModelSpec) -> TrialPipeline:
-    backend_impl = load_backend(model.backend, model.model_identifier)
+    call_params = dict(model.params)
+    backend_impl = load_backend(model.backend, model.model_identifier, call_params)
     agents = {
         role: AgentSpec(
             role=role,
             system_prompt=prompt_for(role),
             backend=backend_impl,
-            default_params=model.params,
+            default_params=call_params,
             retry_policy=model.retry_policy,
         )
         for role in Role

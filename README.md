@@ -7,8 +7,8 @@ This repository implements a reproducible harness for auditing fairness in inter
 - Paired cue toggling (control/treatment) with case×model blocked randomization plus placebo tagging in logs
 - Budgets/guards: per-role byte & token caps, per-phase message caps, judge blinding
 - Structured logs with event tags (objections, interruptions, safety)
-- Metrics: paired McNemar log-odds, flip rate, byte share, measurement-error correction, frozen tone classifier with calibration (Platt, ECE, κ)
-- Extensible backends: Echo (offline), Groq, Gemini; open‑source adapters are easy to add
+- Metrics: paired McNemar log-odds, flip rate, byte share, measurement-error correction, frozen tone classifier with calibration (Platt, ECE, ?)
+- Extensible backends: Echo (offline), Local (transformers/llama.cpp), Groq, Gemini; open-source adapters are easy to add
 - Batch driver with resumable manifests for running K×L×N matrices
 - Versioned JSON Schema validation for TrialLog output (toggle via `BAILIFF_VALIDATE_LOGS=0`)
 - Configurable backend hardening (timeouts, retries, rate-limit sleeps) with metadata captured in logs
@@ -17,9 +17,12 @@ This repository implements a reproducible harness for auditing fairness in inter
 1. Create a virtual environment and install:
    - `python -m venv .venv && .venv\Scripts\activate` (Windows) or `source .venv/bin/activate`
    - `pip install -e .[analysis,agent]`
+   - (Optional) `pip install -e .[local]` to pull in the offline transformers/llama.cpp adapters (install PyTorch per platform instructions).
 2. (Optional) Set API keys: `GROQ_API_KEY`, `GOOGLE_API_KEY`
 3. Run a pilot pair and write logs:
    - Echo: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend echo --out trial_logs.jsonl`
+   - Local (transformers): `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend local --model distilgpt2 --backend-param model_name=distilgpt2 --out trial_logs.jsonl`
+   - Local (llama.cpp): `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend local --backend-param provider=llama_cpp --backend-param model_path=models/llama.gguf --out trial_logs.jsonl`
    - Groq: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend groq --model llama3-8b-8192 --out trial_logs.jsonl`
    - Gemini: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend gemini --model gemini-1.5-flash --out trial_logs.jsonl`
    - Add `--placebo <key>` (e.g., `name_placebo`) to schedule additional negative-control pairs if you are not using the sample YAML.
@@ -47,6 +50,7 @@ During the VERDICT phase the judge agent must begin its response with a JSON obj
 - API reference (core modules): `docs/API.md`
 - Measurement-error calibration CLI: `scripts/run_measurement_calibration.py`
 - Outcome scripts (GLMM, GEE+Satterthwaite, wild cluster bootstrap): `docs/OUTCOME_SCRIPTS.md`
+- Local backend reference: `docs/USER_GUIDE.md#local-backend-options`
 
 ## FAQ
 - How do I add a new case? Create a YAML under `bailiff/datasets/cases/` with `summary`, `facts`, `witnesses`, and `cue_slots`, then run `load_case_templates()` to validate it. See the user guide.

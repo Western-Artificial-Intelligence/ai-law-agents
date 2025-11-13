@@ -10,7 +10,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 import yaml
 
-from bailiff.agents.base import AgentSpec, RetryPolicy
+from bailiff.agents.base import AgentBackend, AgentSpec, RetryPolicy
 from bailiff.agents.prompts import prompt_for
 from bailiff.core.config import AgentBudget, CueToggle, PhaseBudget, Phase, Role, TrialConfig
 from bailiff.core.io import RunManifest, RunManifestEntry, compute_prompt_hash, write_jsonl
@@ -26,6 +26,7 @@ class Backend(str, Enum):
     ECHO = "echo"
     GROQ = "groq"
     GEMINI = "gemini"
+    LOCAL = "local"
 
 class PilotConfig(BaseSettings):
     """Configuration for pilot trial runs with environment variable support."""
@@ -55,6 +56,62 @@ class EchoBackend:
         return f"[ECHO]\n{prompt}"
 
 
+def _load_backend(
+    choice: Backend,
+    model_identifier: str,
+    runtime_params: Dict[str, object],
+    metadata: Dict[str, object],
+) -> AgentBackend:
+    """Instantiate the requested backend, mutating parameter dictionaries in-place."""
+
+    if choice == Backend.ECHO:
+        return EchoBackend()
+    if choice == Backend.GROQ:
+        try:
+            from bailiff.agents.backends import GroqBackend  # type: ignore
+        except Exception as exc:  # pragma: no cover - optional dep
+            raise SystemExit(f"Groq backend unavailable: {exc}")
+        return GroqBackend(model=model_identifier or "llama3-8b-8192")
+    if choice == Backend.GEMINI:
+        try:
+            from bailiff.agents.backends import GeminiBackend  # type: ignore
+        except Exception as exc:  # pragma: no cover - optional dep
+            raise SystemExit(f"Gemini backend unavailable: {exc}")
+        return GeminiBackend(model=model_identifier or "gemini-1.5-flash")
+    if choice == Backend.LOCAL:
+        try:
+            from bailiff.agents.backends_local import LlamaCppBackend, LocalTransformersBackend  # type: ignore
+        except Exception as exc:
+            raise SystemExit(f"Local backend unavailable: {exc}")
+        provider = str(runtime_params.pop("provider", "transformers")).lower()
+        metadata.setdefault("provider", provider)
+        if provider == "llama_cpp":
+            model_path = str(runtime_params.pop("model_path", model_identifier))
+            if not model_path:
+                raise SystemExit("Provide --backend-param model_path=<gguf> for llama_cpp provider.")
+            metadata.setdefault("model_path", model_path)
+            n_ctx = int(runtime_params.pop("n_ctx", 2048))
+            metadata.setdefault("n_ctx", n_ctx)
+            n_threads_value = runtime_params.pop("n_threads", None)
+            n_threads = int(n_threads_value) if n_threads_value is not None else None
+            if n_threads is not None:
+                metadata.setdefault("n_threads", n_threads)
+            return LlamaCppBackend(
+                model_path=model_path,
+                n_ctx=n_ctx,
+                n_threads=n_threads,
+            )
+        model_name = str(runtime_params.pop("model_name", model_identifier))
+        if not model_name:
+            raise SystemExit("Provide --backend-param model_name=<hf-id> or --model for local transformers backend.")
+        metadata.setdefault("model_name", model_name)
+        device = runtime_params.pop("device", None)
+        if device is not None:
+            metadata.setdefault("device", device)
+        return LocalTransformersBackend(model_name_or_path=model_name, device=device)
+    raise SystemExit(f"Unsupported backend choice: {choice.value}")
+
+
 def parse_args() -> dict[str, object]:
     """Parse command line arguments into a dictionary."""
     import argparse
@@ -62,7 +119,7 @@ def parse_args() -> dict[str, object]:
     parser.add_argument("--case", type=Path, help="Path to the case template file")
     parser.add_argument("--config", type=Path, help="Path to YAML config file")
     parser.add_argument("--seed", type=int, help="Base random seed")
-    parser.add_argument("--backend", choices=["echo", "groq", "gemini"], help="LLM backend to use")
+    parser.add_argument("--backend", choices=["echo", "groq", "gemini", "local"], help="LLM backend to use")
     parser.add_argument("--model", help="Model identifier for backend")
     parser.add_argument("--out", type=Path, help="Optional JSONL output path")
     parser.add_argument("--manifest", type=Path, help="Optional manifest JSONL path")
@@ -195,13 +252,16 @@ def main() -> None:
         timeout_seconds=float(policy_cfg.get("timeout_seconds", args.timeout_seconds)),
         rate_limit_seconds=float(policy_cfg.get("rate_limit_seconds", args.rate_limit_seconds)),
     )
-    param_snapshot = dict(backend_params)
+    runtime_params = dict(backend_params)
+    metadata_params = dict(backend_params)
+    backend = _load_backend(args.backend, model_id, runtime_params, metadata_params)
+    param_snapshot = dict(runtime_params)
     base_config = TrialConfig(
         case_template=case_path,
         cue=cue,
         model_identifier=model_id,
         backend_name=args.backend.value,
-        model_parameters=param_snapshot,
+        model_parameters=dict(metadata_params),
         seed=seed,
         agent_budgets=budgets,
         phase_budgets=phase_budgets,
@@ -209,22 +269,6 @@ def main() -> None:
         negative_controls=tuple(placebo_toggles),
         block_key=block_key,
     )
-
-    # Select backend based on config
-    if args.backend == Backend.ECHO:
-        backend = EchoBackend()
-    elif args.backend == Backend.GROQ:
-        try:
-            from bailiff.agents.backends import GroqBackend  # type: ignore
-        except Exception as e:  # pragma: no cover - optional dep
-            raise SystemExit(f"Groq backend unavailable: {e}")
-        backend = GroqBackend(model=model_id or "llama3-8b-8192")
-    else:  # gemini
-        try:
-            from bailiff.agents.backends import GeminiBackend  # type: ignore
-        except Exception as e:  # pragma: no cover - optional dep
-            raise SystemExit(f"Gemini backend unavailable: {e}")
-        backend = GeminiBackend(model=model_id or "gemini-1.5-flash")
 
     agents = {
         role: AgentSpec(
