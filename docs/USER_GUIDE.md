@@ -36,6 +36,10 @@ Paired mini-trials with LLM agents (judge, prosecution, defense) test whether to
 - Backend parameters (e.g., `temperature`) can be supplied via `backend_params` in YAML (or repeated `--backend-param key=value` flags) and are recorded in `model_parameters`.
 
 ## Structured verdict output
+<<<<<<< HEAD
+- The judge prompt now requires the VERDICT phase to start with JSON `{"verdict":"guilty|not_guilty","sentence":<value>}` before any prose.
+- `TrialSession` extracts the JSON when present and falls back to the legacy keyword/regex parsing so older logs stay compatible.
+=======
 - The judge prompt now requires the VERDICT phase to start with JSON {"verdict":"guilty|not_guilty","sentence":<value>} before any prose.
 - Judge agents must start every VERDICT-phase utterance with a JSON object such as {"verdict": "guilty", "sentence": 24} so _parse_and_set_verdict_sentence() can populate TrialLog.verdict/sentence.
 - TrialSession extracts the JSON when present and falls back to the legacy keyword/regex parsing so older logs stay compatible.
@@ -61,6 +65,7 @@ models:
       n_ctx: 4096
       n_threads: 8
 `
+>>>>>>> main
 
 ## Multi-case loop (Python)
 ```python
