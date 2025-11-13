@@ -20,6 +20,9 @@ This repository implements a reproducible harness for auditing fairness in inter
    - Groq: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend groq --model llama3-8b-8192 --out trial_logs.jsonl`
    - Gemini: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend gemini --model gemini-1.5-flash --out trial_logs.jsonl`
 
+## Verdict JSON Contract
+During the VERDICT phase the judge agent must begin its response with a JSON object containing a `verdict` key (and optionally `sentence`). Narrative rationale can follow on subsequent lines, but the leading JSON block is required so `_parse_and_set_verdict_sentence()` can populate `TrialLog.verdict`/`sentence`.
+
 ## Repository Layout
 - `bailiff/core`: State machine, config, logging, session engine, JSONL I/O
 - `bailiff/agents`: Agent abstractions, prompts, optional Groq/Gemini backends

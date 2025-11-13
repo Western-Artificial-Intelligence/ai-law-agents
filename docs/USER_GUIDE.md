@@ -16,7 +16,12 @@ Paired mini-trials with LLM agents (judge, prosecution, defense) test whether to
 - Groq: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend groq --model llama3-8b-8192 --out trial_logs.jsonl`
 - Gemini: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend gemini --model gemini-1.5-flash --out trial_logs.jsonl`
 
-## Multi‑case loop (Python)
+## Verdict formatting requirements
+- Judge agents must start every VERDICT-phase utterance with a JSON object such as `{"verdict": "guilty", "sentence": 24}`.
+- The JSON line may be followed by natural-language reasoning, but `_parse_and_set_verdict_sentence()` assumes the first block is valid JSON so it can write `TrialLog.verdict`/`sentence`.
+- Custom prompts/backends should explicitly instruct the judge to emit this JSON header before any prose.
+
+## Multi-case loop (Python)
 ```python
 from pathlib import Path
 from bailiff.datasets.templates import cue_catalog
