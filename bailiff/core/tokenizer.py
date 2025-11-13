@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
 try:  # pragma: no cover - optional dependency
@@ -18,9 +18,9 @@ class Tokenizer:
     """Wrapper around tiktoken with a safe fallback."""
 
     model: Optional[str] = None
+    _encoder: Optional[object] = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self._encoder = None
         if tiktoken is None:
             return
         if self.model:
