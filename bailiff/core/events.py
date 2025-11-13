@@ -31,9 +31,9 @@ class UtteranceLog:
     phase: Phase
     content: str
     byte_count: int
-    token_count: Optional[int]
-    addressed_to: Optional[Role]
     timestamp: datetime
+    token_count: int = 0
+    addressed_to: Optional[Role] = None
     interruption: bool = False
     objection_raised: bool = False
     objection_ruling: Optional[ObjectionRuling] = None
@@ -48,16 +48,16 @@ class TrialLog:
     trial_id: str
     case_identifier: str
     model_identifier: str
-    backend_name: Optional[str] = None
-    model_parameters: Dict[str, object] = field(default_factory=dict)
     cue_name: str
     cue_condition: Optional[str]
     cue_value: Optional[str]
-    block_key: Optional[str] = None
-    is_placebo: bool = False
     seed: int
     started_at: datetime
     completed_at: Optional[datetime]
+    backend_name: Optional[str] = None
+    model_parameters: Dict[str, object] = field(default_factory=dict)
+    block_key: Optional[str] = None
+    is_placebo: bool = False
     utterances: List[UtteranceLog] = field(default_factory=list)
     verdict: Optional[str] = None
     sentence: Optional[str] = None

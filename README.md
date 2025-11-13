@@ -5,10 +5,10 @@ This repository implements a reproducible harness for auditing fairness in inter
 ## Features
 - Multi‑agent trial simulation with roles: judge, prosecution, defense
 - Paired cue toggling (control/treatment) with case×model blocked randomization plus placebo tagging in logs
-- Budgets/guards: per‑role byte caps, per‑phase message caps, judge blinding
+- Budgets/guards: per-role byte & token caps, per-phase message caps, judge blinding
 - Structured logs with event tags (objections, interruptions, safety)
-- Metrics: paired McNemar log‑odds, flip rate, byte share, measurement‑error correction, basic tone utilities
-- Extensible backends: Echo, Local (transformers/llama.cpp), Groq, Gemini; open-source adapters are easy to add
+- Metrics: paired McNemar log-odds, flip rate, byte share, measurement-error correction, frozen tone classifier with calibration (Platt, ECE, ?)
+- Extensible backends: Echo (offline), Local (transformers/llama.cpp), Groq, Gemini; open-source adapters are easy to add
 - Batch driver with resumable manifests for running K×L×N matrices
 - Versioned JSON Schema validation for TrialLog output (toggle via `BAILIFF_VALIDATE_LOGS=0`)
 - Configurable backend hardening (timeouts, retries, rate-limit sleeps) with metadata captured in logs
@@ -27,7 +27,11 @@ This repository implements a reproducible harness for auditing fairness in inter
    - Gemini: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend gemini --model gemini-1.5-flash --out trial_logs.jsonl`
    - Add `--placebo <key>` (e.g., `name_placebo`) to schedule additional negative-control pairs if you are not using the sample YAML.
    - Provide `--manifest runs/pilot_manifest.jsonl` to co-save per-run metadata with prompt hashes.
-4. Run a batch across cases/models: `python scripts/run_trial_matrix.py --config configs/batch.yaml --out runs/batch_logs.jsonl --manifest runs/batch_manifest.jsonl`
+4. Calibrate and inspect the frozen tone classifier: `python scripts/run_tone_calibration.py`
+5. Run a batch across cases/models: `python scripts/run_trial_matrix.py --config configs/batch.yaml --out runs/batch_logs.jsonl --manifest runs/batch_manifest.jsonl`
+
+## Verdict JSON Contract
+During the VERDICT phase the judge agent must begin its response with a JSON object containing a `verdict` key (and optionally `sentence`). Narrative rationale can follow on subsequent lines, but the leading JSON block is required so `_parse_and_set_verdict_sentence()` can populate `TrialLog.verdict`/`sentence`.
 
 ## Repository Layout
 - `bailiff/core`: State machine, config, logging, session engine, JSONL I/O
@@ -37,7 +41,7 @@ This repository implements a reproducible harness for auditing fairness in inter
 - `bailiff/schemas`: JSON Schemas (TrialLog) used for validation
 - `bailiff/metrics`: Outcome and procedural metrics/utilities
 - `bailiff/analysis`: Lightweight statistical helpers
-- `scripts/`: CLI entry points (pilot runner)
+- `scripts/`: CLI entry points (pilot runner, tone calibration report)
 - `docs/`: User guide and API reference
 
 ## Learn More
