@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Callable, Dict, Iterable, Optional, Tuple
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterable, Optional, Tuple
 
 from .config import DEFAULT_PHASE_ORDER, Phase, PolicyViolation, Role, TrialConfig
 from .events import TrialLog, UtteranceLog
 from .logging import mark_completed
-from pathlib import Path
 import re
 import yaml
 
@@ -27,9 +27,13 @@ class TrialSession:
     _bytes_used: Dict[Role, int] = field(default_factory=dict, init=False, repr=False)
     _tokens_used: Dict[Role, int] = field(default_factory=dict, init=False, repr=False)
     _case_text: Optional[str] = field(default=None, init=False, repr=False)
+    _token_encoding: Optional[Any] = field(default=None, init=False, repr=False)
     # NEW: Tracks count of each type of policy violation during trial execution
     # Format: {"interruption_not_allowed": 2, "judge_cue_exposure": 1}
     _policy_violations: Dict[str, int] = field(default_factory=dict, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._token_encoding = self._init_token_encoding()
 
     def run(self) -> TrialLog:
         """Execute the state machine and return the populated trial log."""
@@ -192,6 +196,12 @@ class TrialSession:
     def _truncate_to_tokens(self, content: str, max_tokens: int) -> str:
         if max_tokens <= 0 or not content:
             return ""
+        encoding = self._token_encoding
+        if encoding is not None:
+            tokens = encoding.encode(content)
+            if len(tokens) <= max_tokens:
+                return content
+            return encoding.decode(tokens[:max_tokens])
         matches = list(self._TOKEN_RE.finditer(content))
         if len(matches) <= max_tokens:
             return content
@@ -201,7 +211,31 @@ class TrialSession:
     def _count_tokens(self, content: str) -> int:
         if not content:
             return 0
+        encoding = self._token_encoding
+        if encoding is not None:
+            return len(encoding.encode(content))
         return len(self._TOKEN_RE.findall(content))
+
+    def _init_token_encoding(self) -> Optional[Any]:
+        """Best-effort selection of a tokenizer matching the configured model."""
+
+        try:  # pragma: no cover - optional dependency
+            import tiktoken  # type: ignore
+        except Exception:
+            return None
+
+        model_id = (self.config.model_identifier or "").strip()
+        if model_id:
+            try:
+                return tiktoken.encoding_for_model(model_id)
+            except KeyError:
+                pass  # fall back below
+            except Exception:
+                return None
+        try:
+            return tiktoken.get_encoding("cl100k_base")
+        except Exception:
+            return None
 
     def _load_and_render_case(self) -> str:
         path = Path(self.config.case_template)
