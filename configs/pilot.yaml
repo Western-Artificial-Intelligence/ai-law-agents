@@ -6,10 +6,13 @@ cue: name_ethnicity
 agent_budgets:
   judge:
     max_bytes: 1500
+    max_tokens: 600
   prosecution:
     max_bytes: 1800
+    max_tokens: 700
   defense:
     max_bytes: 1800
+    max_tokens: 700
 phase_budgets:
   - phase: opening
     max_messages: 2
