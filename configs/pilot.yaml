@@ -1,6 +1,6 @@
-﻿# Placeholder pilot configuration for the B.A.I.L.I.F.F. harness.
+# Placeholder pilot configuration for the B.A.I.L.I.F.F. harness.
 case_template: cases/traffic.yaml
-model_identifier: echo
+model_identifier: llama-3.1-8b-instant
 seed: 42
 cue: name_ethnicity
 agent_budgets:
@@ -38,3 +38,5 @@ backend_params:
   temperature: 0.2
 placebos:
   - name_placebo
+
+
