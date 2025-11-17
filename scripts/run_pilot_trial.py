@@ -202,7 +202,7 @@ def main() -> None:
             case_path = args.case.resolve()
         else:
             raise SystemExit("No case template file specified in config or command line arguments.")
-        model_id = cfg.get("model_identifier") or args.model or args.backend.value
+        model_id = args.model or cfg.get("model_identifier") or args.backend.value
         seed = int(cfg.get("seed", args.seed))
         judge_blinding = bool(cfg.get("judge_blinding", False))
         backend_params.update(cfg.get("backend_params", {}) or {})
