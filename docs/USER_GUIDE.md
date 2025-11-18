@@ -9,7 +9,11 @@ Paired mini-trials with LLM agents (judge, prosecution, defense) test whether to
 - Python 3.10+
 - Create venv: `python -m venv .venv && .venv\\Scripts\\activate` (Windows) or `source .venv/bin/activate` (macOS/Linux)
 - Install: `pip install -e .[analysis,agent]`
-- Optional keys: `GROQ_API_KEY`, `GOOGLE_API_KEY` (or `GEMINI_API_KEY`)
+- Optional keys (.env examples):
+  - `GROQ_API_KEYS=["key1","key2","key3"]`
+  - `GROQ_API_KEY_CONCURRENCY={"key1":2,"key2":4}`
+  - `DEFAULT_MAX_CONCURRENCY=1`
+  - `GOOGLE_API_KEY` or `GEMINI_API_KEY`
 
 ## Quickstart (single pair)
 - Echo backend: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend echo --out trial_logs.jsonl`
@@ -34,6 +38,14 @@ Paired mini-trials with LLM agents (judge, prosecution, defense) test whether to
 - `scripts/run_pilot_trial.py` exposes `--timeout-seconds`, `--max-retries`, `--backoff-seconds`, `--backoff-multiplier`, and `--rate-limit-seconds` plus YAML overrides under `backend_policy`.
 - Batch configs support per-model (or global) `backend_policy` blocks with the same keys; parameters are logged in each `TrialLog`.
 - Backend parameters (e.g., `temperature`) can be supplied via `backend_params` in YAML (or repeated `--backend-param key=value` flags) and are recorded in `model_parameters`.
+
+## Groq key pool & best practices
+- `GroqBackend` sends every call through a `GroqKeyPool` that selects the least-used key with available concurrency, so usage stays balanced.
+- Each `GroqKeyStatus` tracks inflight requests, total calls, rate-limit streaks, and exponential backoff (max 30s) so the pool can failover as soon as a key throttles.
+- Set `GROQ_API_KEYS` (JSON list), `DEFAULT_MAX_CONCURRENCY`, and optional `GROQ_API_KEY_CONCURRENCY` in `.env` to specify how many concurrent calls can be
+done at once to that API key. (see "Install" above for formatting)
+- Size concurrency caps based on Groq dashboard quotas; keep the default conservative to avoid exceeding project limits.
+- Monitor long-running services by logging `GroqKeyPool.summary()` periodically to confirm no key is permanently throttled.
 
 ## Structured verdict output
 <<<<<<< HEAD

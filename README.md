@@ -18,7 +18,11 @@ This repository implements a reproducible harness for auditing fairness in inter
    - `python -m venv .venv && .venv\Scripts\activate` (Windows) or `source .venv/bin/activate`
    - `pip install -e .[analysis,agent]`
    - (Optional) `pip install -e .[local]` to pull in the offline transformers/llama.cpp adapters (install PyTorch per platform instructions).
-2. (Optional) Set API keys: `GROQ_API_KEY`, `GOOGLE_API_KEY`
+2. Set API keys via `.env`:
+   - `GROQ_API_KEYS=["key1","key2"]` (JSON list parsed with `json.loads`)
+   - `GROQ_API_KEY_CONCURRENCY={"key1":2,"key2":4}` to override per-key concurrency (defaults to `DEFAULT_MAX_CONCURRENCY`)
+   - `DEFAULT_MAX_CONCURRENCY=1` fallback when a key is missing above
+   - `GOOGLE_API_KEY` or `GEMINI_API_KEY`
 3. Run a pilot pair and write logs:
    - Echo: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend echo --out trial_logs.jsonl`
    - Local (transformers): `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend local --model distilgpt2 --backend-param model_name=distilgpt2 --out trial_logs.jsonl`
@@ -51,6 +55,13 @@ During the VERDICT phase the judge agent must begin its response with a JSON obj
 - Measurement-error calibration CLI: `scripts/run_measurement_calibration.py`
 - Outcome scripts (GLMM, GEE+Satterthwaite, wild cluster bootstrap): `docs/OUTCOME_SCRIPTS.md`
 - Local backend reference: `docs/USER_GUIDE.md#local-backend-options`
+
+## Groq key pool
+- `GroqBackend` now pulls from a pool of keys and rotates to the least-used key that has spare concurrency.
+- Rate-limit responses put the offending key into an exponential backoff window (up to 30s) so the next request can failover to a different key automatically.
+- Configure keys/concurrency in `.env` using `GROQ_API_KEYS`, optional `GROQ_API_KEY_CONCURRENCY`, and `DEFAULT_MAX_CONCURRENCY`.
+- Per-key status (inflight, uses, backoff) is captured by `GroqKeyStatus` and available via `GroqKeyPool.summary()` if you need to log/debug pool health.
+- Best practices: spread keys across Groq projects, set realistic concurrency caps from your Groq dashboard, and keep the default low so a single runaway job cannot exhaust the pool.
 
 ## FAQ
 - How do I add a new case? Create a YAML under `bailiff/datasets/cases/` with `summary`, `facts`, `witnesses`, and `cue_slots`, then run `load_case_templates()` to validate it. See the user guide.

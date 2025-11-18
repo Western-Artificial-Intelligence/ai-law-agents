@@ -10,7 +10,9 @@ bailiff.egg-info/requires.txt
 bailiff.egg-info/top_level.txt
 bailiff/agents/__init__.py
 bailiff/agents/backends.py
+bailiff/agents/backends_local.py
 bailiff/agents/base.py
+bailiff/agents/groq_pool.py
 bailiff/agents/prompts.py
 bailiff/analysis/stats.py
 bailiff/core/__init__.py
@@ -18,7 +20,9 @@ bailiff/core/config.py
 bailiff/core/events.py
 bailiff/core/io.py
 bailiff/core/logging.py
+bailiff/core/schema.py
 bailiff/core/session.py
+bailiff/core/tokenizer.py
 bailiff/datasets/__init__.py
 bailiff/datasets/templates.py
 bailiff/metrics/__init__.py
@@ -26,6 +30,14 @@ bailiff/metrics/outcome.py
 bailiff/metrics/procedural.py
 bailiff/metrics/tone.py
 bailiff/orchestration/__init__.py
+bailiff/orchestration/blocks.py
 bailiff/orchestration/pipeline.py
 bailiff/orchestration/randomization.py
+bailiff/schemas/__init__.py
+tests/test_core_suite.py
 tests/test_e2e_echo.py
+tests/test_groq_pool.py
+tests/test_session.py
+tests/test_token_budget.py
+tests/test_tone_pipeline.py
+tests/test_verdict_parser.py
