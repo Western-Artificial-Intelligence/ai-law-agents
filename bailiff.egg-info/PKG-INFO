@@ -10,11 +10,14 @@ Requires-Dist: numpy>=1.24
 Requires-Dist: pandas>=2.0
 Requires-Dist: scipy>=1.10
 Requires-Dist: statsmodels>=0.14
+Requires-Dist: jsonschema>=4.21
 Requires-Dist: pydantic>=2.5
 Requires-Dist: pydantic-settings>=2.1
 Requires-Dist: pyyaml>=6.0
 Requires-Dist: python-dotenv>=1.0
 Requires-Dist: tqdm>=4.66
+Requires-Dist: scikit-learn>=1.3
+Requires-Dist: tiktoken>=0.7
 Provides-Extra: agent
 Requires-Dist: openai>=1.40; extra == "agent"
 Requires-Dist: anthropic>=0.34; extra == "agent"
@@ -24,6 +27,9 @@ Provides-Extra: analysis
 Requires-Dist: matplotlib>=3.8; extra == "analysis"
 Requires-Dist: seaborn>=0.13; extra == "analysis"
 Requires-Dist: plotnine>=0.12; extra == "analysis"
+Provides-Extra: local
+Requires-Dist: transformers>=4.41; extra == "local"
+Requires-Dist: llama-cpp-python>=0.2; extra == "local"
 
 # B.A.I.L.I.F.F. — Bias Analysis in Interactive Legal Intelligence & Fairness Framework
 
@@ -31,39 +37,66 @@ This repository implements a reproducible harness for auditing fairness in inter
 
 ## Features
 - Multi‑agent trial simulation with roles: judge, prosecution, defense
-- Paired cue toggling (control/treatment) with blocked randomization
-- Budgets/guards: per‑role byte caps, per‑phase message caps, judge blinding
+- Paired cue toggling (control/treatment) with case×model blocked randomization plus placebo tagging in logs
+- Budgets/guards: per-role byte & token caps, per-phase message caps, judge blinding
 - Structured logs with event tags (objections, interruptions, safety)
-- Metrics: paired McNemar log‑odds, flip rate, byte share, measurement‑error correction, basic tone utilities
-- Extensible backends: Echo (offline), Groq, Gemini; open‑source adapters are easy to add
+- Metrics: paired McNemar log-odds, flip rate, byte share, measurement-error correction, frozen tone classifier with calibration (Platt, ECE, ?)
+- Extensible backends: Echo (offline), Local (transformers/llama.cpp), Groq, Gemini; open-source adapters are easy to add
+- Batch driver with resumable manifests for running K×L×N matrices
+- Versioned JSON Schema validation for TrialLog output (toggle via `BAILIFF_VALIDATE_LOGS=0`)
+- Configurable backend hardening (timeouts, retries, rate-limit sleeps) with metadata captured in logs
 
 ## Quickstart
 1. Create a virtual environment and install:
    - `python -m venv .venv && .venv\Scripts\activate` (Windows) or `source .venv/bin/activate`
    - `pip install -e .[analysis,agent]`
-2. (Optional) Set API keys: `GROQ_API_KEY`, `GOOGLE_API_KEY`
+   - (Optional) `pip install -e .[local]` to pull in the offline transformers/llama.cpp adapters (install PyTorch per platform instructions).
+2. Set API keys via `.env`:
+   - `GROQ_API_KEYS=["key1","key2"]` (JSON list parsed with `json.loads`)
+   - `GROQ_API_KEY_CONCURRENCY={"key1":2,"key2":4}` to override per-key concurrency (defaults to `DEFAULT_MAX_CONCURRENCY`)
+   - `DEFAULT_MAX_CONCURRENCY=1` fallback when a key is missing above
+   - `GOOGLE_API_KEY` or `GEMINI_API_KEY`
 3. Run a pilot pair and write logs:
    - Echo: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend echo --out trial_logs.jsonl`
+   - Local (transformers): `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend local --model distilgpt2 --backend-param model_name=distilgpt2 --out trial_logs.jsonl`
+   - Local (llama.cpp): `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend local --backend-param provider=llama_cpp --backend-param model_path=models/llama.gguf --out trial_logs.jsonl`
    - Groq: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend groq --model llama3-8b-8192 --out trial_logs.jsonl`
    - Gemini: `python scripts/run_pilot_trial.py --config configs/pilot.yaml --backend gemini --model gemini-1.5-flash --out trial_logs.jsonl`
+   - Add `--placebo <key>` (e.g., `name_placebo`) to schedule additional negative-control pairs if you are not using the sample YAML.
+   - Provide `--manifest runs/pilot_manifest.jsonl` to co-save per-run metadata with prompt hashes.
+4. Calibrate and inspect the frozen tone classifier: `python scripts/run_tone_calibration.py`
+5. Run a batch across cases/models: `python scripts/run_trial_matrix.py --config configs/batch.yaml --out runs/batch_logs.jsonl --manifest runs/batch_manifest.jsonl`
+
+## Verdict JSON Contract
+During the VERDICT phase the judge agent must begin its response with a JSON object containing a `verdict` key (and optionally `sentence`). Narrative rationale can follow on subsequent lines, but the leading JSON block is required so `_parse_and_set_verdict_sentence()` can populate `TrialLog.verdict`/`sentence`.
 
 ## Repository Layout
 - `bailiff/core`: State machine, config, logging, session engine, JSONL I/O
 - `bailiff/agents`: Agent abstractions, prompts, optional Groq/Gemini backends
 - `bailiff/datasets`: Case templates and cue catalogs
 - `bailiff/orchestration`: Randomization and pipelines for paired trials
+- `bailiff/schemas`: JSON Schemas (TrialLog) used for validation
 - `bailiff/metrics`: Outcome and procedural metrics/utilities
 - `bailiff/analysis`: Lightweight statistical helpers
-- `scripts/`: CLI entry points (pilot runner)
+- `scripts/`: CLI entry points (pilot runner, tone calibration report)
 - `docs/`: User guide and API reference
 
 ## Learn More
 - Design overview and diagrams: `DESIGN.md`
 - User guide (install, run, add case/cue/backend, analysis): `docs/USER_GUIDE.md`
 - API reference (core modules): `docs/API.md`
+- Measurement-error calibration CLI: `scripts/run_measurement_calibration.py`
+- Outcome scripts (GLMM, GEE+Satterthwaite, wild cluster bootstrap): `docs/OUTCOME_SCRIPTS.md`
+- Local backend reference: `docs/USER_GUIDE.md#local-backend-options`
+
+## Groq key pool
+- `GroqBackend` now pulls from a pool of keys and rotates to the least-used key that has spare concurrency.
+- Rate-limit responses put the offending key into an exponential backoff window (up to 30s) so the next request can failover to a different key automatically.
+- Configure keys/concurrency in `.env` using `GROQ_API_KEYS`, optional `GROQ_API_KEY_CONCURRENCY`, and `DEFAULT_MAX_CONCURRENCY`.
+- Per-key status (inflight, uses, backoff) is captured by `GroqKeyStatus` and available via `GroqKeyPool.summary()` if you need to log/debug pool health.
+- Best practices: spread keys across Groq projects, set realistic concurrency caps from your Groq dashboard, and keep the default low so a single runaway job cannot exhaust the pool.
 
 ## FAQ
-- How do I add a new case? Create a YAML under `bailiff/datasets/cases/` with `summary`, `facts`, `witnesses`, and `cue_slots`. See the user guide.
+- How do I add a new case? Create a YAML under `bailiff/datasets/cases/` with `summary`, `facts`, `witnesses`, and `cue_slots`, then run `load_case_templates()` to validate it. See the user guide.
 - How do I add a cue? Extend `cue_catalog()` in `bailiff/datasets/templates.py`.
 - How do I analyze results? Export JSONL from the runner and follow the analysis examples in `docs/USER_GUIDE.md`.
-
