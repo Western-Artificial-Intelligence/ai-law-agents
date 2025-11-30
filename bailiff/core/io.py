@@ -5,7 +5,7 @@ import hashlib
 import json
 import os
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Dict, Iterable, List, Optional, Sequence
@@ -89,12 +89,36 @@ def compute_prompt_hash(*components: str) -> str:
     return h.hexdigest()
 
 
+def _format_datetime_rfc3339(dt: datetime) -> str:
+    """Format a datetime object as RFC 3339 compliant string."""
+    if dt.tzinfo is None:
+        # Naive datetime - assume UTC and append 'Z' for RFC 3339
+        return dt.isoformat() + "Z"
+    # Timezone-aware datetime - use isoformat and replace +00:00 with Z for UTC
+    formatted = dt.isoformat()
+    if formatted.endswith("+00:00"):
+        return formatted[:-6] + "Z"
+    return formatted
+
+
 def _encode(obj):  # type: ignore[override]
     if isinstance(obj, datetime):
-        return obj.isoformat()
+        return _format_datetime_rfc3339(obj)
     if isinstance(obj, (Role, Phase, ObjectionRuling)):
         return obj.value
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+
+def _convert_datetimes_recursive(obj: object) -> object:
+    """Recursively convert datetime objects in nested structures to RFC 3339 strings."""
+    if isinstance(obj, datetime):
+        return _format_datetime_rfc3339(obj)
+    elif isinstance(obj, dict):
+        return {key: _convert_datetimes_recursive(value) for key, value in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return type(obj)(_convert_datetimes_recursive(item) for item in obj)
+    else:
+        return obj
 
 
 def write_jsonl(logs: Iterable[TrialLog], path: Path, *, validate: Optional[bool] = None) -> None:
@@ -103,6 +127,8 @@ def write_jsonl(logs: Iterable[TrialLog], path: Path, *, validate: Optional[bool
     with path.open("w", encoding="utf-8") as f:
         for log in logs:
             rec = asdict(log)
+            # Recursively convert datetime objects to RFC 3339 strings
+            rec = _convert_datetimes_recursive(rec)
             if validate_flag:
                 validate_trial_log(rec)
             f.write(json.dumps(rec, default=_encode, ensure_ascii=False) + "\n")
@@ -116,6 +142,8 @@ def append_jsonl(logs: Iterable[TrialLog], path: Path, *, validate: Optional[boo
     with path.open("a", encoding="utf-8") as f:
         for log in logs:
             rec = asdict(log)
+            # Recursively convert datetime objects to RFC 3339 strings
+            rec = _convert_datetimes_recursive(rec)
             if validate_flag:
                 validate_trial_log(rec)
             f.write(json.dumps(rec, default=_encode, ensure_ascii=False) + "\n")
