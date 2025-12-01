@@ -32,6 +32,7 @@ class PilotConfig(BaseSettings):
     """Configuration for pilot trial runs with environment variable support."""
     case: Optional[Path] = Field(None, description="Path to the case template file")
     config: Optional[Path] = Field(None, description="Path to YAML config file")
+    cues: Optional[Path] = Field(None, description="Path to YAML file containing custom cue definitions")
     seed: int = Field(42, description="Base random seed")
     backend: Backend = Field(Backend.ECHO, description="LLM backend to use")
     model: Optional[str] = Field(None, description="Model identifier for backend")
@@ -118,6 +119,7 @@ def parse_args() -> dict[str, object]:
     parser = argparse.ArgumentParser(description="Run a pilot B.A.I.L.I.F.F. trial pair.")
     parser.add_argument("--case", type=Path, help="Path to the case template file")
     parser.add_argument("--config", type=Path, help="Path to YAML config file")
+    parser.add_argument("--cues", type=Path, help="Path to YAML file containing custom cue definitions")
     parser.add_argument("--seed", type=int, help="Base random seed")
     parser.add_argument("--backend", choices=["echo", "groq", "gemini", "local"], help="LLM backend to use")
     parser.add_argument("--model", help="Model identifier for backend")
@@ -156,6 +158,45 @@ def parse_args() -> dict[str, object]:
     return parsed
 
 
+def _load_cues_from_file(cues_path: Path) -> Dict[str, CueToggle]:
+    """Load custom cue definitions from a YAML file."""
+    try:
+        data = yaml.safe_load(cues_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise SystemExit(f"Failed to load cues file '{cues_path}': {exc}")
+    
+    if not isinstance(data, dict):
+        raise SystemExit(f"Cues file '{cues_path}' must contain a dictionary mapping cue keys to definitions")
+    
+    catalog: Dict[str, CueToggle] = {}
+    for cue_key, cue_data in data.items():
+        if not isinstance(cue_data, dict):
+            raise SystemExit(f"Invalid cue definition for '{cue_key}' in '{cues_path}': expected dictionary")
+        
+        name = cue_data.get("name", cue_key)
+        control_value = cue_data.get("control_value")
+        treatment_value = cue_data.get("treatment_value")
+        
+        if control_value is None or treatment_value is None:
+            raise SystemExit(
+                f"Cue '{cue_key}' in '{cues_path}' missing required fields: "
+                f"control_value and treatment_value are required"
+            )
+        
+        metadata = cue_data.get("metadata", {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+        
+        catalog[cue_key] = CueToggle(
+            name=str(name),
+            control_value=str(control_value),
+            treatment_value=str(treatment_value),
+            metadata={k: str(v) for k, v in metadata.items()},
+        )
+    
+    return catalog
+
+
 def _case_blob(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
@@ -186,11 +227,18 @@ def main() -> None:
     backend_params: Dict[str, object] = dict(args.backend_params)
     policy_cfg: Dict[str, object] = {}
 
+    # Load custom cues from file if specified, otherwise use default catalog
+    if args.cues:
+        custom_catalog = _load_cues_from_file(args.cues)
+        # Merge with default catalog (custom cues override defaults with same key)
+        catalog = {**cue_catalog(), **custom_catalog}
+    else:
+        catalog = cue_catalog()
+
     # Load additional config from YAML file if specified
     if args.config:
         cfg = yaml.safe_load(args.config.read_text(encoding="utf-8"))
         cue_key = cfg.get("cue", "name_ethnicity")
-        catalog = cue_catalog()
         cue_def = catalog.get(cue_key)
         if cue_def is None:
             raise SystemExit(f"Unknown cue key in config: {cue_key}")
@@ -225,11 +273,16 @@ def main() -> None:
     else:
         if args.case is None:
             raise SystemExit("Provide a case path or a --config file")
-        cue = CueToggle(
-            name="name_ethnicity",
-            control_value="Alex Johnson",
-            treatment_value="DeShawn Jackson",
-        )
+        # Use default cue from catalog if available, otherwise fall back to hardcoded
+        default_cue = catalog.get("name_ethnicity")
+        if default_cue is not None:
+            cue = default_cue
+        else:
+            cue = CueToggle(
+                name="name_ethnicity",
+                control_value="Alex Johnson",
+                treatment_value="DeShawn Jackson",
+            )
         case_path = args.case.resolve()
         model_id = args.model or args.backend.value
         seed = args.seed
