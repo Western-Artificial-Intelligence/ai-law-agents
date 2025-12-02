@@ -36,23 +36,31 @@ class TrialSession:
     def run(self) -> TrialLog:
         """Execute the state machine and return the populated trial log."""
 
-    # NEW: Tracks count of each type of policy violation during trial execution
-    # Format: {"interruption_not_allowed": 2, "judge_cue_exposure": 1}
-    _policy_violations: Dict[str, int] = field(default_factory=dict, init=False, repr=False)
-
-    def run(self) -> TrialLog:
-        """Execute the state machine and return the populated trial log."""
-
         self._log = self.log_factory(self.config)
         self._bytes_used = {role: 0 for role in Role}
         self._tokens_used = {role: 0 for role in Role}
         self._tokenizer = Tokenizer(self.config.model_identifier)
         self._case_text = self._load_and_render_case()
-        for phase in DEFAULT_PHASE_ORDER:
-            self._run_phase(phase)
-        if self.policy_hooks:
-            for hook in self.policy_hooks.values():
-                hook(self._log)
+        
+        # Initialize token budget tracking
+        with TokenBudgetEnforcer(self.config) as budget_tracker:
+            self._token_budget = budget_tracker
+            
+            for phase in DEFAULT_PHASE_ORDER:
+                self._run_phase(phase)
+                
+            if self.policy_hooks:
+                for hook in self.policy_hooks.values():
+                    hook(self._log)
+                    
+            # Save token usage summary if output directory is configured
+            if hasattr(self.config, 'output_dir'):
+                try:
+                    output_path = budget_tracker.save_summary(self.config.output_dir)
+                    logging.info(f"Token usage summary saved to {output_path}")
+                except Exception as e:
+                    logging.error(f"Failed to save token usage summary: {e}")
+                    
         mark_completed(self._log)
         return self._log
 
@@ -193,23 +201,41 @@ class TrialSession:
 
     def _apply_token_budget(self, role: Role, content: str) -> Tuple[str, int]:
         """Clip content to remaining token budget and record usage."""
-
         if self._tokenizer is None:
             self._tokenizer = Tokenizer(self.config.model_identifier)
+            
+        # Count tokens in the content
+        tokens = self._tokenizer.count(content)
+        
+        # If we have a token budget tracker, record the usage
+        if hasattr(self, '_token_budget') and self._token_budget is not None:
+            # For now, we'll assume all tokens are prompt tokens
+            # In a real implementation, you'd want to track prompt vs completion tokens
+            prompt_tokens = tokens
+            completion_tokens = 0  # This would come from the model response
+            self._token_budget.record_usage(role, prompt_tokens, completion_tokens)
+        
+        # Apply budget constraints
         budget = self.config.budget_for(role)
         used = self._tokens_used.get(role, 0)
         max_tokens = budget.max_tokens
+        
         if max_tokens is None:
-            tokens = self._tokenizer.count(content)
             self._tokens_used[role] = used + tokens
             return content, tokens
+            
         remaining = max(0, max_tokens - used)
         if remaining == 0:
             self._tokens_used[role] = used
             return "", 0
-        clipped, tokens = self._tokenizer.clip(content, remaining)
+            
+        if tokens > remaining:
+            clipped, actual_tokens = self._tokenizer.clip(content, remaining)
+            self._tokens_used[role] = used + actual_tokens
+            return clipped, actual_tokens
+            
         self._tokens_used[role] = used + tokens
-        return clipped, tokens
+        return content, tokens
 
     def _load_and_render_case(self) -> str:
         path = Path(self.config.case_template)
