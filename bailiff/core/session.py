@@ -14,6 +14,7 @@ from .config import DEFAULT_PHASE_ORDER, Phase, PolicyViolation, Role, TrialConf
 from .events import TrialLog, UtteranceLog
 from .logging import mark_completed
 from .tokenizer import Tokenizer
+from .token_budget import TokenBudgetEnforcer
 
 AgentResponder = Callable[[Role, Phase, str], str]
 
