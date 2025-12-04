@@ -12,7 +12,21 @@ echo "🚀 Starting GAUL Environment Setup..."
 # 2. Create Virtual Environment
 if [ ! -d ".venv" ]; then
     echo "📦 Creating virtual environment..."
-    python3 -m venv .venv
+    if python3 -m venv .venv; then
+        echo "✅ Venv created successfully."
+    else
+        echo "⚠️ Standard venv creation failed (likely missing ensurepip). Retrying without pip..."
+        # Fallback for systems with broken python3-venv (common on Debian/Ubuntu)
+        python3 -m venv .venv --without-pip
+        
+        # Manually install pip
+        source .venv/bin/activate
+        echo "⬇️ Downloading get-pip.py..."
+        curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+        python3 get-pip.py
+        rm get-pip.py
+        deactivate
+    fi
 else
     echo "✅ Virtual environment already exists."
 fi
