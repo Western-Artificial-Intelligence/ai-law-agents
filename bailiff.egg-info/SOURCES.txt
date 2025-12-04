@@ -33,10 +33,13 @@ bailiff/orchestration/__init__.py
 bailiff/orchestration/blocks.py
 bailiff/orchestration/pipeline.py
 bailiff/orchestration/randomization.py
+bailiff/orchestrator/app.py
+bailiff/orchestrator/schemas.py
 bailiff/schemas/__init__.py
 tests/test_core_suite.py
 tests/test_e2e_echo.py
 tests/test_groq_pool.py
+tests/test_orchestrator_api.py
 tests/test_session.py
 tests/test_token_budget.py
 tests/test_tone_pipeline.py
