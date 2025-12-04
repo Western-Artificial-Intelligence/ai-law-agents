@@ -6,7 +6,7 @@ import os
 import uuid
 from typing import Dict, List, Optional
 
-from ..core.token_budget_simplified import check_run_allowed, register_token_usage
+from ..core.token_budget import check_run_allowed, register_token_usage
 from .groq_pool import GroqKeyPool
 
 
@@ -35,11 +35,15 @@ class GroqBackend:
         self._run_id = str(uuid.uuid4())
 
     def __call__(self, prompt: str, **kwargs: object) -> str:  # pragma: no cover - network
-        """Make a chat completion request with token tracking."""
+        """Make a chat completion request with automatic retry on rate limits.
+        
+        Retries infinitely with exponential backoff (capped at 30s) until a request succeeds.
+        Automatically rotates through available keys and waits for backoff periods to expire.
+        """
         import time
         
-        # Estimate token usage
-        estimated_prompt_tokens = len(prompt) // 4  # Simple heuristic
+        # Estimate token usage for budget enforcement
+        estimated_prompt_tokens = len(prompt) // 4  # Simple heuristic: ~4 chars per token
         estimated_completion_tokens = kwargs.get("max_tokens", 512)
         estimated_total = estimated_prompt_tokens + estimated_completion_tokens
         
@@ -129,8 +133,9 @@ class GeminiBackend:
         key_id = _hash_api_key(self._api_key)
         
         # Estimate token usage for budget enforcement
+        # A simple heuristic: 1 token ≈ 4 characters for English text
         estimated_prompt_tokens = len(prompt) // 4
-        estimated_completion_tokens = 500  # Default estimate
+        estimated_completion_tokens = 500  # Default estimate for completion
         estimated_total = estimated_prompt_tokens + estimated_completion_tokens
         
         if self._enforce_budget:

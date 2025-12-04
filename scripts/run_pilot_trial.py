@@ -1,6 +1,7 @@
-﻿"""CLI entry point for kicking off a pilot paired trial with token budget support."""
+"""CLI entry point for kicking off a pilot paired trial with token budget support."""
 from __future__ import annotations
 
+import json
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -177,7 +178,7 @@ def setup_token_budget(config: PilotConfig, args=None) -> None:
                     budget.quota_limits[key] = int(limit)
             
             # Load alert threshold (only if not already set by CLI)
-            if "alert_threshold_percent" in budget_config and not args.alert_threshold:
+            if "alert_threshold_percent" in budget_config and not hasattr(args, 'alert_threshold'):
                 budget.alert_threshold_percent = int(budget_config["alert_threshold_percent"])
                 
             print(f"Loaded token budget configuration from {token_config.budget_config_path}")
@@ -201,7 +202,7 @@ def setup_token_budget(config: PilotConfig, args=None) -> None:
                     budget.quota_limits[key] = int(limit)
             
             # Load alert threshold (only if not already set by CLI)
-            if "alert_threshold_percent" in tb_config and not args.alert_threshold:
+            if "alert_threshold_percent" in tb_config and not hasattr(args, 'alert_threshold'):
                 budget.alert_threshold_percent = int(tb_config["alert_threshold_percent"])
     
     # Print budget summary
@@ -300,12 +301,118 @@ def main() -> None:
     # Setup token budget with command line arguments
     setup_token_budget(config, args)
     
-    # The rest of the main implementation goes here
+    # Token budget initialized, now continue with the actual trial
     print("Token budget configured and ready to use")
     print(f"Enforcement: {'ENABLED' if config.token.enforce_budget else 'DISABLED'}")
-    print(f"Log path: {config.token.token_log_path}")
-    if config.token.budget_report_path:
-        print(f"Report path: {config.token.budget_report_path}")
+    
+    # Load case template
+    if not config.case:
+        parser.error("Case template is required")
+    
+    case_template = load_case_templates([config.case])[0]
+    print(f"Using case template: {config.case.name}")
+    
+    # Set up backend and retry policy
+    if config.backend == Backend.ECHO:
+        backend_factory = lambda role: echo_backend_factory()
+    elif config.backend == Backend.GROQ:
+        backend_factory = lambda role: groq_backend_factory(config.model or "llama3-8b-8192", config)
+    elif config.backend == Backend.GEMINI:
+        backend_factory = lambda role: gemini_backend_factory(config.model or "gemini-1.5-flash", config)
+    elif config.backend == Backend.LOCAL:
+        backend_factory = lambda role: local_backend_factory(config.model or "distilgpt2", config)
+    else:
+        raise ValueError(f"Unknown backend: {config.backend}")
+    
+    # Get role prompts from case template
+    judge_prompt = prompt_for(Role.JUDGE, case_template)
+    prosecution_prompt = prompt_for(Role.PROSECUTION, case_template)
+    defense_prompt = prompt_for(Role.DEFENSE, case_template)
+    
+    retry_policy = RetryPolicy(
+        max_retries=config.max_retries,
+        timeout_seconds=config.timeout_seconds,
+        backoff_seconds=config.backoff_seconds,
+        backoff_multiplier=config.backoff_multiplier,
+        rate_limit_seconds=config.rate_limit_seconds,
+    )
+    
+    # Create agent specifications
+    agents = {
+        Role.JUDGE: AgentSpec(backend_factory=backend_factory, prompt=judge_prompt, retry_policy=retry_policy),
+        Role.PROSECUTION: AgentSpec(
+            backend_factory=backend_factory, prompt=prosecution_prompt, retry_policy=retry_policy
+        ),
+        Role.DEFENSE: AgentSpec(backend_factory=backend_factory, prompt=defense_prompt, retry_policy=retry_policy),
+    }
+    
+    # Build trial pipeline and execute
+    pipeline = TrialPipeline(agents=agents, enforce_budget=config.token.enforce_budget)
+    
+    base_config = build_blocks(
+        case_template=config.case,
+        model_identifier=config.model or config.backend.name,
+        backend_name=config.backend.name,
+        agent_prompts={
+            Role.JUDGE: judge_prompt,
+            Role.PROSECUTION: prosecution_prompt,
+            Role.DEFENSE: defense_prompt,
+        },
+        seed=config.seed,
+    )
+    
+    block_key = block_identifier(case_template.stem, config.model or config.backend.name)
+    selected_cue = case_template.cues.get(case_template.default_cue)
+    if selected_cue is None:
+        raise ValueError(f"No cue found with name {case_template.default_cue}")
+    
+    # Update cue in the base config
+    cue_toggle = CueToggle(
+        name=selected_cue.name,
+        control_value=selected_cue.control,
+        treatment_value=selected_cue.treatment,
+    )
+    base_config.cue = cue_toggle
+    
+    # Generate randomized cue assignments
+    assignments = blockwise_permutations([block_key], [cue_toggle], config.seed, config.placebos)
+    
+    # Resolve placebos if specified
+    if config.placebos:
+        placebo_cues = resolve_placebos(config.placebos, cue_catalog())
+        assignments.extend(blockwise_permutations([block_key], placebo_cues, config.seed))
+    
+    # Generate trial plans from assignments
+    plans = list(pipeline.assign_pairs(base_config, assignments))
+    
+    # Execute trial plans and collect logs
+    logs = []
+    for plan in plans:
+        print(f"Running trial with cue: {plan.control.config.cue.name}")
+        plan_logs = pipeline.run_pair(plan)
+        logs.extend(plan_logs)
+    
+    # Write logs to output file if specified
+    if config.out:
+        write_jsonl(config.out, logs)
+        print(f"Wrote {len(logs)} log entries to {config.out}")
+    
+    # Update manifest if specified
+    if config.manifest:
+        manifest = RunManifest.from_file(config.manifest) if config.manifest.exists() else RunManifest([])
+        for log in logs:
+            entry = RunManifestEntry(
+                run_id=log.run_id,
+                case_template=str(config.case),
+                model_identifier=config.model or config.backend.name,
+                cue_name=log.config.cue.name,
+                cue_condition=log.config.cue_condition or "",
+                verdict=log.verdict if hasattr(log, "verdict") else None,
+                prompt_hash=compute_prompt_hash(log),
+            )
+            manifest.entries.append(entry)
+        manifest.to_file(config.manifest)
+        print(f"Updated manifest at {config.manifest} with {len(logs)} new entries")
 
 if __name__ == "__main__":
     main()

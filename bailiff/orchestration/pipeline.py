@@ -1,15 +1,15 @@
-﻿"""High-level orchestration utilities with token budget integration."""
+"""High-level orchestration utilities with token budget integration."""
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import Dict, Iterable, Iterator, List, Optional, Sequence
+from typing import Dict, Iterable, Iterator, List, Mapping, Optional, Sequence
 
 from bailiff.agents.base import AgentSpec, build_responder_map
 from bailiff.core.config import CueToggle, Role, TrialConfig
 from bailiff.core.logging import LogFactory, default_log_factory
 from bailiff.core.session import TrialSession
-from bailiff.core.token_budget_simplified import check_run_allowed
+from bailiff.core.token_budget import check_run_allowed
 from bailiff.metrics.outcome import PairedOutcome
 from bailiff.orchestration.randomization import PairAssignment, block_identifier
 
@@ -99,25 +99,110 @@ class TrialPipeline:
         
         return total_estimate
 
-    def assign_pairs(self, base: TrialConfig, assignments: Iterable[PairAssignment]) -> Iterator[PairPlan]:
-        """Generate trial plans from cue assignments."""
+    def assign_pairs(self, base_config: TrialConfig, assignments: Iterable[PairAssignment]) -> Iterator[PairPlan]:
+        """Generate pair plans by applying randomization assignments."""
 
+        block_key = base_config.block_key or block_identifier(
+            base_config.case_template.stem, base_config.model_identifier
+        )
+        yield from self.assign_blocked_pairs({block_key: base_config}, assignments)
+
+    def assign_blocked_pairs(
+        self,
+        block_configs: Mapping[str, TrialConfig],
+        assignments: Iterable[PairAssignment],
+    ) -> Iterator[PairPlan]:
+        """Generate plans across multiple case × model blocks."""
+
+        block_map: Dict[str, TrialConfig] = dict(block_configs)
+        if not block_map:
+            return
+        cue_maps: Dict[str, Dict[str, CueToggle]] = {
+            key: self._cue_lookup(cfg) for key, cfg in block_map.items()
+        }
+        default_key = next(iter(block_map))
         for assignment in assignments:
-            control_config = base.copy()
-            treatment_config = base.copy()
-            # Apply common metadata from assignment
-            for config in [control_config, treatment_config]:
-                config.cue = assignment.cue
-                config.is_placebo = assignment.is_placebo
-                config.block_key = assignment.block_key
-                config.seed = assignment.seed
-            # Apply condition-specific metadata
-            control_config.cue_condition = "control"
-            control_config.cue_value = assignment.cue.control_value
-            treatment_config.cue_condition = "treatment"
-            treatment_config.cue_value = assignment.cue.treatment_value
-            # Yield the paired plan
-            yield PairPlan(
-                control=TrialPlan(config=control_config, cue_value=control_config.cue_value or ""),
-                treatment=TrialPlan(config=treatment_config, cue_value=treatment_config.cue_value or ""),
+            block_key = assignment.block_key or default_key
+            base = block_map.get(block_key)
+            if base is None:
+                raise KeyError(f"No TrialConfig registered for block '{block_key}'.")
+            cue_name = assignment.cue_name or base.cue.name
+            cue_template = cue_maps[block_key].get(cue_name)
+            if cue_template is None:
+                raise KeyError(f"Cue '{cue_name}' is not configured for block '{block_key}'.")
+            control_cue = CueToggle(
+                name=cue_template.name,
+                control_value=assignment.control_value,
+                treatment_value=assignment.treatment_value,
+                metadata=cue_template.metadata,
             )
+            treatment_cue = CueToggle(
+                name=cue_template.name,
+                control_value=assignment.treatment_value,
+                treatment_value=assignment.control_value,
+                metadata=cue_template.metadata,
+            )
+            control_config = self._clone_config(
+                base,
+                control_cue,
+                cue_condition="control",
+                cue_value=assignment.control_value,
+                assignment=assignment,
+                is_treatment=False,
+            )
+            treatment_config = self._clone_config(
+                base,
+                treatment_cue,
+                cue_condition="treatment",
+                cue_value=assignment.treatment_value,
+                assignment=assignment,
+                is_treatment=True,
+            )
+            yield PairPlan(
+                control=TrialPlan(config=control_config, cue_value=assignment.control_value),
+                treatment=TrialPlan(config=treatment_config, cue_value=assignment.treatment_value),
+            )
+
+    def _cue_lookup(self, config: TrialConfig) -> Dict[str, CueToggle]:
+        """Return a cue lookup including negative controls for a config."""
+
+        lookup: Dict[str, CueToggle] = {config.cue.name: config.cue}
+        for placebo in config.negative_controls:
+            lookup[placebo.name] = placebo
+        return lookup
+
+    def _clone_config(
+        self,
+        base: TrialConfig,
+        cue: CueToggle,
+        *,
+        cue_condition: str,
+        cue_value: str,
+        assignment: PairAssignment,
+        is_treatment: bool,
+    ) -> TrialConfig:
+        """Copy a TrialConfig while swapping cue assignment metadata."""
+
+        block_key = assignment.block_key or base.block_key or block_identifier(
+            base.case_template.stem, base.model_identifier
+        )
+        seed = assignment.seed + (1 if is_treatment else 0)
+        return TrialConfig(
+            case_template=base.case_template,
+            cue=cue,
+            model_identifier=base.model_identifier,
+            backend_name=base.backend_name,
+            model_parameters=base.model_parameters,
+            seed=seed,
+            agent_budgets=base.agent_budgets,
+            phase_budgets=base.phase_budgets,
+            negative_controls=base.negative_controls,
+            cue_condition=cue_condition,
+            cue_value=cue_value,
+            judge_blinding=base.judge_blinding,
+            strict_blinding=base.strict_blinding,
+            enforce_role_phase_policy=base.enforce_role_phase_policy,
+            notes=base.notes,
+            block_key=block_key,
+            is_placebo=assignment.is_placebo,
+        )
