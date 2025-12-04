@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Dict, Optional
 
-from ..core.token_budget_simplified import check_run_allowed, register_token_usage
+from ..core.token_budget import check_run_allowed, register_token_usage
 
 
 class LocalBackendError(RuntimeError):
