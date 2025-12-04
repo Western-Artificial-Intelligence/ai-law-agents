@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Dict, Iterable, Iterator, List, Mapping, Sequence
 
 from bailiff.agents.base import AgentSpec, build_responder_map
-from bailiff.core.config import CueToggle, Role, TrialConfig
+from bailiff.core.config import CueToggle, Person, Role, TrialConfig
 from bailiff.core.logging import LogFactory, default_log_factory
 from bailiff.core.session import TrialSession
 from bailiff.metrics.outcome import PairedOutcome
@@ -84,16 +84,28 @@ class TrialPipeline:
             cue_template = cue_maps[block_key].get(cue_name)
             if cue_template is None:
                 raise KeyError(f"Cue '{cue_name}' is not configured for block '{block_key}'.")
+            # Helper to resolve Person objects from string values
+            def _resolve_person(name: str, template: CueToggle) -> Person:
+                if name == template.control_person.name:
+                    return template.control_person
+                if name == template.treatment_person.name:
+                    return template.treatment_person
+                # Fallback: create a temporary Person if name doesn't match (e.g. for robust handling)
+                return Person(name=name)
+
+            control_person = _resolve_person(assignment.control_value, cue_template)
+            treatment_person = _resolve_person(assignment.treatment_value, cue_template)
+
             control_cue = CueToggle(
                 name=cue_template.name,
-                control_value=assignment.control_value,
-                treatment_value=assignment.treatment_value,
+                control_person=control_person,
+                treatment_person=treatment_person,
                 metadata=cue_template.metadata,
             )
             treatment_cue = CueToggle(
                 name=cue_template.name,
-                control_value=assignment.treatment_value,
-                treatment_value=assignment.control_value,
+                control_person=treatment_person,
+                treatment_person=control_person,
                 metadata=cue_template.metadata,
             )
             control_config = self._clone_config(

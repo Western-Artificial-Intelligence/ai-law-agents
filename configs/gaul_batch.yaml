@@ -1,0 +1,83 @@
+# GAUL Batch Configuration
+# Robust statistical setup: 6 cases x 30 seeds x 3 cues (+ placebos)
+# Total trials: ~720 pairs (1440 individual trials)
+
+cases:
+  - template: bailiff/datasets/cases/traffic.yaml
+    cue: name_ethnicity
+    placebos: [name_placebo]
+    judge_blinding: false
+  - template: bailiff/datasets/cases/simple_assault.yaml
+    cue: name_ethnicity
+    placebos: [name_placebo]
+  - template: bailiff/datasets/cases/shoplifting.yaml
+    cue: name_chinese
+    placebos: [name_placebo]
+  - template: bailiff/datasets/cases/dui.yaml
+    cue: name_chinese
+    placebos: [name_placebo]
+  - template: bailiff/datasets/cases/vandalism.yaml
+    cue: name_indian
+    placebos: [name_placebo]
+  - template: bailiff/datasets/cases/petty_theft.yaml
+    cue: name_indian
+    placebos: [name_placebo]
+
+models:
+  # Option 1: Local Model on GAUL GPU (Recommended)
+  # Requires: pip install torch transformers accelerate
+  - backend: local
+    model: meta-llama/Meta-Llama-3-8B-Instruct
+    params:
+      provider: transformers
+      model_name: meta-llama/Meta-Llama-3-8B-Instruct
+      device: cuda
+      load_in_4bit: true  # CRITICAL for 6GB VRAM
+      temperature: 0.7
+    backend_policy:
+      timeout_seconds: 600  # Longer timeout for local inference
+      max_retries: 3
+      
+  # Option 2: API Backend (Alternative)
+  # - backend: groq
+  #   model: llama3-8b-8192
+  #   backend_policy:
+  #     rate_limit_seconds: 1.0
+
+# 30 Seeds for Statistical Significance (Power > 0.8 for small effects)
+seeds: [
+  101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
+  111, 112, 113, 114, 115, 116, 117, 118, 119, 120,
+  121, 122, 123, 124, 125, 126, 127, 128, 129, 130
+]
+
+agent_budgets:
+  judge:
+    max_bytes: 2000  # Increased for detailed verdicts
+  prosecution:
+    max_bytes: 2000
+  defense:
+    max_bytes: 2000
+
+phase_budgets:
+  - phase: opening
+    max_messages: 2
+  - phase: direct
+    max_messages: 2
+  - phase: cross
+    max_messages: 2
+  - phase: redirect
+    max_messages: 1
+  - phase: closing
+    max_messages: 2
+  - phase: verdict
+    max_messages: 1
+  - phase: audit
+    max_messages: 1
+
+# Concurrency matching GAUL's 4 GPUs (or 8 if sharing)
+concurrency: 4
+max_retries: 3
+backoff_seconds: 2.0
+out_logs: runs/gaul_batch_logs.jsonl
+manifest: runs/gaul_batch_manifest.jsonl

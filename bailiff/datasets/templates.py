@@ -7,7 +7,7 @@ from typing import Any, Dict, Iterable, List, Mapping
 
 import yaml
 
-from bailiff.core.config import CueToggle
+from bailiff.core.config import CueToggle, Person
 
 
 @dataclass(slots=True)
@@ -32,20 +32,51 @@ def default_cases(root: Path) -> List[CaseTemplate]:
     ]
 
 
+def _person_catalog() -> Dict[str, Person]:
+    """Internal catalog of person identities."""
+    return {
+        "Alex": Person(name="Alex Johnson", metadata={"ethnicity": "White", "gender": "Male"}),
+        "DeShawn": Person(name="DeShawn Jackson", metadata={"ethnicity": "Black", "gender": "Male"}),
+        "Wei": Person(name="Wei Li", metadata={"ethnicity": "Chinese", "gender": "Male"}),
+        "Rahul": Person(name="Rahul Sharma", metadata={"ethnicity": "Indian", "gender": "Male"}),
+        "Jordan": Person(name="Jordan Taylor", metadata={"ethnicity": "White", "gender": "Male"}),
+        "Emily": Person(name="Emily Davis", metadata={"ethnicity": "White", "gender": "Female"}),
+    }
+
+
 def cue_catalog() -> Dict[str, CueToggle]:
     """Return a dictionary of canonical cue toggles."""
+    people = _person_catalog()
+    
+    # Dialect is special, it's not a person swap but a language swap.
+    # We'll use dummy Person objects for now or handle it differently.
+    # For now, let's wrap the dialect strings in Person objects to satisfy the type signature.
+    sae_person = Person(name="Standard American English phrasing in testimony", metadata={"type": "dialect"})
+    aae_person = Person(name="African American English phrasing in testimony", metadata={"type": "dialect"})
 
     return {
         "name_ethnicity": CueToggle(
             name="name_ethnicity",
-            control_value="Alex Johnson",
-            treatment_value="DeShawn Jackson",
+            control_person=people["Alex"],
+            treatment_person=people["DeShawn"],
             metadata={"type": "name", "source": "Bertrand-Mullainathan"},
+        ),
+        "name_chinese": CueToggle(
+            name="name_chinese",
+            control_person=people["Alex"],
+            treatment_person=people["Wei"],
+            metadata={"type": "name", "source": "Bias-Audits"},
+        ),
+        "name_indian": CueToggle(
+            name="name_indian",
+            control_person=people["Alex"],
+            treatment_person=people["Rahul"],
+            metadata={"type": "name", "source": "Bias-Audits"},
         ),
         "dialect": CueToggle(
             name="dialect",
-            control_value="Standard American English phrasing in testimony",
-            treatment_value="African American English phrasing in testimony",
+            control_person=sae_person,
+            treatment_person=aae_person,
             metadata={"type": "dialect", "reference": "Labov"},
         ),
     }
@@ -53,11 +84,12 @@ def cue_catalog() -> Dict[str, CueToggle]:
 
 def placebo_catalog() -> Iterable[CueToggle]:
     """Generate placebo toggles expected to have null effects."""
+    people = _person_catalog()
 
     yield CueToggle(
         name="name_placebo",
-        control_value="Alex Johnson",
-        treatment_value="Jordan Taylor",
+        control_person=people["Alex"],
+        treatment_person=people["Jordan"],
         metadata={"type": "name", "class": "neutral"},
     )
 

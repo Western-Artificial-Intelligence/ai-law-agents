@@ -61,13 +61,31 @@ class PhaseBudget:
 
 
 @dataclass(slots=True)
+class Person:
+    """Represents a specific identity used in a cue."""
+    
+    name: str
+    metadata: Mapping[str, str] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class CueToggle:
     """Represents a demographic or sociolinguistic cue that can be switched."""
 
     name: str
-    control_value: str
-    treatment_value: str
+    control_person: Person
+    treatment_person: Person
     metadata: Mapping[str, str] = field(default_factory=dict)
+
+    @property
+    def control_value(self) -> str:
+        """Backwards compatibility: return the name of the control person."""
+        return self.control_person.name
+
+    @property
+    def treatment_value(self) -> str:
+        """Backwards compatibility: return the name of the treatment person."""
+        return self.treatment_person.name
 
 
 @dataclass(slots=True)
