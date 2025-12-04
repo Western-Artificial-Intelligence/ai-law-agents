@@ -1,8 +1,11 @@
-"""Offline adapters backed by transformers or llama.cpp."""
+"""Offline adapters backed by transformers or llama.cpp with token budget tracking."""
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from typing import Dict, Optional
+
+from ..core.token_budget_simplified import check_run_allowed, register_token_usage
 
 
 class LocalBackendError(RuntimeError):
@@ -11,13 +14,14 @@ class LocalBackendError(RuntimeError):
 
 @dataclass
 class LocalTransformersBackend:
-    """Hugging Face transformers-backed generation."""
+    """Hugging Face transformers-backed generation with token tracking."""
 
     model_name_or_path: str
     device: Optional[str] = None
     max_new_tokens: int = 256
     temperature: float = 0.2
     top_p: float = 0.95
+    enforce_budget: bool = True
 
     def __post_init__(self) -> None:
         try:  # pragma: no cover - optional dependency
@@ -38,9 +42,34 @@ class LocalTransformersBackend:
             "temperature": float(self.temperature),
             "top_p": float(self.top_p),
         }
+        self._run_id = str(uuid.uuid4())
+
+    def _merge_params(self, kwargs: Dict[str, object]) -> Dict[str, object]:
+        """Apply defaults and merge with provided kwargs."""
+        params = self._defaults.copy()
+        params.update(kwargs)
+        return params
 
     def __call__(self, prompt: str, **kwargs: object) -> str:
         params = self._merge_params(kwargs)
+        
+        if self.enforce_budget:
+            # Get accurate token count from tokenizer
+            input_tokens = len(self._tokenizer.encode(prompt))
+            output_tokens = params["max_new_tokens"]
+            total_tokens = input_tokens + output_tokens
+            
+            # Check budget
+            allowed, reason = check_run_allowed(
+                run_id=self._run_id,
+                model_identifier=self.model_name_or_path,
+                api_key_id="local",
+                estimated_tokens=total_tokens
+            )
+            
+            if not allowed:
+                raise RuntimeError(f"Token budget exceeded: {reason}")
+        
         encoded = self._tokenizer(prompt, return_tensors="pt").to(self._model.device)
         with self._torch.no_grad():
             output = self._model.generate(
@@ -49,62 +78,114 @@ class LocalTransformersBackend:
                 temperature=float(params["temperature"]),
                 top_p=float(params["top_p"]),
             )
-        completion = output[0][encoded["input_ids"].shape[-1] :]
-        text = self._tokenizer.decode(completion, skip_special_tokens=True)
-        return text.strip()
-
-    def _merge_params(self, overrides: Dict[str, object]) -> Dict[str, object]:
-        params = dict(self._defaults)
-        for key in ("max_new_tokens", "temperature", "top_p"):
-            if key in overrides:
-                params[key] = overrides[key]
-        return params
+        
+        # Decode and strip prompt
+        decoded = self._tokenizer.decode(output[0], skip_special_tokens=True)
+        result = decoded[len(self._tokenizer.decode(encoded["input_ids"][0], skip_special_tokens=True)) :]
+        
+        if self.enforce_budget:
+            # Log actual token usage
+            input_tokens = len(encoded["input_ids"][0])
+            output_tokens = len(output[0]) - len(encoded["input_ids"][0])
+            
+            register_token_usage(
+                run_id=self._run_id,
+                model_identifier=self.model_name_or_path,
+                api_key_id="local",
+                tokens_prompt=input_tokens,
+                tokens_completion=output_tokens
+            )
+        
+        return result
 
 
 @dataclass
 class LlamaCppBackend:
-    """llama.cpp-backed offline text generation."""
+    """llama.cpp via python bindings with token tracking."""
 
     model_path: str
     n_ctx: int = 2048
-    n_threads: Optional[int] = None
-    max_tokens: int = 256
+    n_threads: int = 4
+    n_batch: int = 512
     temperature: float = 0.2
     top_p: float = 0.95
-
+    enforce_budget: bool = True
+    
     def __post_init__(self) -> None:
         try:  # pragma: no cover - optional dependency
             from llama_cpp import Llama  # type: ignore
         except Exception as exc:  # pragma: no cover
             raise LocalBackendError("llama-cpp-python is required for LlamaCppBackend") from exc
+        
+        self._Llama = Llama
         self._defaults = {
-            "max_tokens": int(self.max_tokens),
+            "max_tokens": 256,
             "temperature": float(self.temperature),
             "top_p": float(self.top_p),
         }
-        self._llama = Llama(
-            model_path=self.model_path,
-            n_ctx=self.n_ctx,
-            n_threads=self.n_threads,
+        self._llama = self._Llama(
+            model_path=str(self.model_path),
+            n_ctx=int(self.n_ctx),
+            n_threads=int(self.n_threads),
+            n_batch=int(self.n_batch),
         )
-
+        self._run_id = str(uuid.uuid4())
+    
+    def _merge_params(self, kwargs: Dict[str, object]) -> Dict[str, object]:
+        """Apply defaults and merge with provided kwargs."""
+        params = self._defaults.copy()
+        params.update(kwargs)
+        return params
+    
     def __call__(self, prompt: str, **kwargs: object) -> str:
-        params = dict(self._defaults)
-        for key in ("max_tokens", "temperature", "top_p"):
-            if key in kwargs:
-                params[key] = kwargs[key]
-        response = self._llama(
-            prompt,
+        params = self._merge_params(kwargs)
+        
+        if self.enforce_budget:
+            # Get accurate token count when possible
+            try:
+                input_tokens = len(self._llama.tokenize(prompt.encode('utf-8')))
+            except:
+                # Fall back to rough estimate
+                input_tokens = len(prompt) // 4
+                
+            output_tokens = params.get("max_tokens", 256)
+            total_tokens = input_tokens + output_tokens
+            
+            # Check budget
+            allowed, reason = check_run_allowed(
+                run_id=self._run_id,
+                model_identifier=self.model_path,
+                api_key_id="local",
+                estimated_tokens=total_tokens
+            )
+            
+            if not allowed:
+                raise RuntimeError(f"Token budget exceeded: {reason}")
+        
+        output = self._llama(
+            prompt=prompt,
             max_tokens=int(params["max_tokens"]),
             temperature=float(params["temperature"]),
             top_p=float(params["top_p"]),
             echo=False,
         )
-        choices = response.get("choices", [])
-        if not choices:
-            return ""
-        choice = choices[0]
-        if "text" in choice:
-            return str(choice["text"]).strip()
-        message = choice.get("message", {})
-        return str(message.get("content", "")).strip()
+        
+        if self.enforce_budget:
+            # Record actual token usage when possible
+            completion_text = output.get("choices", [{}])[0].get("text", "")
+            
+            try:
+                completion_tokens = len(self._llama.tokenize(completion_text.encode('utf-8')))
+            except:
+                # Fall back to rough estimate
+                completion_tokens = len(completion_text) // 4
+            
+            register_token_usage(
+                run_id=self._run_id,
+                model_identifier=self.model_path,
+                api_key_id="local",
+                tokens_prompt=input_tokens,
+                tokens_completion=completion_tokens
+            )
+        
+        return output.get("choices", [{}])[0].get("text", "")
