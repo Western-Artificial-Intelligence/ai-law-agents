@@ -20,6 +20,7 @@ bailiff.egg-info/
 
 #env
 .env
+.env.local
 
 # results and logs
 trial_logs*.*

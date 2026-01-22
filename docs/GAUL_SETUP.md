@@ -20,6 +20,15 @@ Run the deployment script from your local machine (Git Bash or Terminal):
 ### Option B: Manual Upload
 If the script fails, use WinSCP or FileZilla to copy the `ai-law-agents` folder to your home directory on GAUL.
 
+### Optional: Deploy Groq API Keys
+If you keep Groq keys in a local `.env.local`, you can deploy it securely:
+
+```bash
+./scripts/deploy_env_to_gaul.sh your_username
+```
+
+This uploads `.env.local` to GAUL as `~/ai-law-agents/.env` and sets permissions to `600`.
+
 ## 2. Setup on GAUL
 
 1. **SSH into GAUL GPU Node**:
