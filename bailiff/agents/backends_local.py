@@ -18,6 +18,7 @@ class LocalTransformersBackend:
 
     model_name_or_path: str
     device: Optional[str] = None
+    load_in_4bit: bool = False
     max_new_tokens: int = 256
     temperature: float = 0.2
     top_p: float = 0.95
@@ -26,17 +27,33 @@ class LocalTransformersBackend:
     def __post_init__(self) -> None:
         try:  # pragma: no cover - optional dependency
             import torch  # type: ignore
-            from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
+            from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig  # type: ignore
         except Exception as exc:  # pragma: no cover
             raise LocalBackendError("transformers and torch are required for LocalTransformersBackend") from exc
 
         self._torch = torch
         self._tokenizer = AutoTokenizer.from_pretrained(self.model_name_or_path)
-        self._model = AutoModelForCausalLM.from_pretrained(self.model_name_or_path)
-        target_device = self.device
-        if target_device is None:
-            target_device = "cuda" if torch.cuda.is_available() else "cpu"
-        self._model.to(target_device)
+        
+        quantization_config = None
+        if self.load_in_4bit:
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_quant_type="nf4",
+            )
+
+        self._model = AutoModelForCausalLM.from_pretrained(
+            self.model_name_or_path,
+            quantization_config=quantization_config,
+            device_map="auto" if self.load_in_4bit else None,
+        )
+        
+        if not self.load_in_4bit:
+            target_device = self.device
+            if target_device is None:
+                target_device = "cuda" if torch.cuda.is_available() else "cpu"
+            self._model.to(target_device)
+            
         self._defaults = {
             "max_new_tokens": int(self.max_new_tokens),
             "temperature": float(self.temperature),
