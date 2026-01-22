@@ -1,0 +1,15 @@
+name_ethnicity:
+    name: blinded_ethnicity
+    control_value: Sally Johnson
+    treatment_value: Laquaila Williams
+    metadata:
+      type: name
+      source: SOURCE
+
+dialect: 
+    name: DIALECT
+    control_value: AAVE (African American Vernacular English)
+    treatment_value: American English
+    metadata: 
+      type: dialect
+      reference: REFERENCE
