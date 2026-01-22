@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -11,6 +13,7 @@ from typing import Dict, List, Optional
 import yaml
 
 from bailiff.agents.base import AgentSpec, RetryPolicy
+from bailiff.agents.groq_pool import GroqKeyPool
 from bailiff.agents.prompts import prompt_for
 from bailiff.core.config import AgentBudget, CueToggle, Phase, PhaseBudget, Role, TrialConfig
 from bailiff.core.io import RunManifest, RunManifestEntry, append_jsonl, compute_prompt_hash
@@ -23,6 +26,106 @@ from bailiff.orchestration.randomization import block_identifier, blockwise_perm
 
 class BackendUnavailable(RuntimeError):
     """Raised when a requested backend is missing optional deps."""
+
+
+GROQ_LOG_EVERY_COUNT = 50
+GROQ_LOG_EVERY_SECONDS = 300.0
+
+
+def _summarize_groq_pool(summary: List[Dict[str, object]]) -> Dict[str, object]:
+    inflight_total = sum(int(item.get("inflight", 0)) for item in summary)
+    keys_in_use = sum(1 for item in summary if int(item.get("inflight", 0)) > 0)
+    rate_limit_events = sum(int(item.get("consecutive_rate_limits", 0)) for item in summary)
+    backoff_active = sum(1 for item in summary if float(item.get("backoff_remaining", 0)) > 0)
+    max_backoff = max((float(item.get("backoff_remaining", 0)) for item in summary), default=0.0)
+    total_uses = sum(int(item.get("total_uses", 0)) for item in summary)
+    return {
+        "keys": len(summary),
+        "keys_in_use": keys_in_use,
+        "inflight": inflight_total,
+        "rate_limit_events": rate_limit_events,
+        "backoff_active": backoff_active,
+        "max_backoff_seconds": round(max_backoff, 2),
+        "total_uses": total_uses,
+    }
+
+
+def _log_groq_pool(pool: GroqKeyPool, label: str, completed_pairs: Optional[int] = None) -> None:
+    summary = pool.summary()
+    totals = _summarize_groq_pool(summary)
+    if completed_pairs is not None:
+        totals["completed_pairs"] = completed_pairs
+    print(f"[GROQ] Pool {label} totals={totals}")
+    print(f"[GROQ] Pool {label} keys={json.dumps(summary, sort_keys=True)}")
+
+
+class GroqPoolLogger:
+    def __init__(self, log_every_count: int, log_every_seconds: float) -> None:
+        self._log_every_count = log_every_count
+        self._log_every_seconds = log_every_seconds
+        self._lock = threading.Lock()
+        self._last_log_count = 0
+        self._last_log_time = time.monotonic()
+        self._total_completed = 0
+        self._stop_event = threading.Event()
+        self._timer_thread: Optional[threading.Thread] = None
+
+    def log_start(self, pool: GroqKeyPool) -> None:
+        with self._lock:
+            self._last_log_time = time.monotonic()
+            total = self._total_completed
+        _log_groq_pool(pool, "start", completed_pairs=total)
+
+    def log_end(self, pool: GroqKeyPool) -> None:
+        total = self._get_total()
+        _log_groq_pool(pool, "end", completed_pairs=total)
+
+    def start_timer(self, pool: GroqKeyPool) -> None:
+        if self._timer_thread is not None:
+            return
+        self._stop_event.clear()
+        self._timer_thread = threading.Thread(target=self._run_timer, args=(pool,), daemon=True)
+        self._timer_thread.start()
+
+    def stop_timer(self) -> None:
+        self._stop_event.set()
+        if self._timer_thread is not None:
+            self._timer_thread.join()
+            self._timer_thread = None
+
+    def record_completed(self, delta: int, pool: GroqKeyPool) -> None:
+        now = time.monotonic()
+        should_log = False
+        total = 0
+        with self._lock:
+            self._total_completed += delta
+            total = self._total_completed
+            if (
+                total - self._last_log_count >= self._log_every_count
+                or now - self._last_log_time >= self._log_every_seconds
+            ):
+                self._last_log_count = total
+                self._last_log_time = now
+                should_log = True
+        if should_log:
+            _log_groq_pool(pool, "progress", completed_pairs=total)
+
+    def _get_total(self) -> int:
+        with self._lock:
+            return self._total_completed
+
+    def _run_timer(self, pool: GroqKeyPool) -> None:
+        while not self._stop_event.wait(self._log_every_seconds):
+            self._log_if_due(pool)
+
+    def _log_if_due(self, pool: GroqKeyPool) -> None:
+        now = time.monotonic()
+        with self._lock:
+            if now - self._last_log_time < self._log_every_seconds:
+                return
+            self._last_log_time = now
+            total = self._total_completed
+        _log_groq_pool(pool, "progress", completed_pairs=total)
 
 
 @dataclass
@@ -159,7 +262,12 @@ def build_case_specs(cfg: dict) -> List[CaseSpec]:
     return cases
 
 
-def load_backend(backend: str, model: str, params: Optional[Dict[str, object]] = None):
+def load_backend(
+    backend: str,
+    model: str,
+    params: Optional[Dict[str, object]] = None,
+    groq_pool: Optional[GroqKeyPool] = None,
+):
     runtime_params = params or {}
     if backend == "echo":
         class EchoBackend:
@@ -172,7 +280,10 @@ def load_backend(backend: str, model: str, params: Optional[Dict[str, object]] =
             from bailiff.agents.backends import GroqBackend  # type: ignore
         except Exception as exc:  # pragma: no cover
             raise BackendUnavailable(f"Groq backend unavailable: {exc}") from exc
-        return GroqBackend(model=model)
+        backend_impl = GroqBackend(model=model)
+        if groq_pool is not None:
+            setattr(backend_impl, "_pool", groq_pool)
+        return backend_impl
     if backend == "gemini":
         try:
             from bailiff.agents.backends import GeminiBackend  # type: ignore
@@ -201,9 +312,9 @@ def load_backend(backend: str, model: str, params: Optional[Dict[str, object]] =
     raise BackendUnavailable(f"Unsupported backend choice: {backend}")
 
 
-def build_pipeline(model: ModelSpec) -> TrialPipeline:
+def build_pipeline(model: ModelSpec, groq_pool: Optional[GroqKeyPool]) -> TrialPipeline:
     call_params = dict(model.params)
-    backend_impl = load_backend(model.backend, model.model_identifier, call_params)
+    backend_impl = load_backend(model.backend, model.model_identifier, call_params, groq_pool)
     agents = {
         role: AgentSpec(
             role=role,
@@ -249,6 +360,8 @@ def execute_job(
     manifest: RunManifest,
     max_retries: int,
     backoff_seconds: float,
+    groq_pool: Optional[GroqKeyPool],
+    groq_logger: Optional[GroqPoolLogger],
 ) -> int:
     case_identifier = job.case.template.stem
     block_key = block_identifier(case_identifier, job.model.model_identifier)
@@ -266,7 +379,7 @@ def execute_job(
         block_key=block_key,
         notes=job.case.notes,
     )
-    pipeline = build_pipeline(job.model)
+    pipeline = build_pipeline(job.model, groq_pool)
     placebo_names = [toggle.name for toggle in job.case.placebo_toggles]
     cues_for_blocks: List[CueToggle] = [job.case.cue, *job.case.placebo_toggles]
     assignments = list(
@@ -320,6 +433,8 @@ def execute_job(
                     )
                 )
                 completed += 1
+                if job.model.backend == "groq" and groq_logger and groq_pool:
+                    groq_logger.record_completed(1, groq_pool)
                 break
             except Exception:
                 attempt += 1
@@ -366,6 +481,14 @@ def main() -> None:
     max_retries = int(cfg.get("max_retries", 2))
     backoff_seconds = float(cfg.get("backoff_seconds", 2.0))
 
+    groq_pool = None
+    groq_logger = None
+    if any(model.backend == "groq" for model in models):
+        groq_pool = GroqKeyPool.from_env()
+        groq_logger = GroqPoolLogger(GROQ_LOG_EVERY_COUNT, GROQ_LOG_EVERY_SECONDS)
+        groq_logger.log_start(groq_pool)
+        groq_logger.start_timer(groq_pool)
+
     jobs: List[BatchJob] = []
     for case in cases:
         for model in models:
@@ -386,6 +509,8 @@ def main() -> None:
                 manifest,
                 max_retries,
                 backoff_seconds,
+                groq_pool,
+                groq_logger,
             ): job
             for job in jobs
         }
@@ -397,6 +522,10 @@ def main() -> None:
                 raise SystemExit(str(exc)) from exc
             except Exception as exc:
                 print(f"[WARN] Job failed for {job.case.template.name} ({job.model.model_identifier}): {exc}")
+
+    if groq_logger and groq_pool:
+        groq_logger.stop_timer()
+        groq_logger.log_end(groq_pool)
 
     print(f"Completed {completed} paired assignments; manifest now has {len(manifest)} entries.")
 
