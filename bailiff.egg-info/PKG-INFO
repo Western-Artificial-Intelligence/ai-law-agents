@@ -18,6 +18,8 @@ Requires-Dist: python-dotenv>=1.0
 Requires-Dist: tqdm>=4.66
 Requires-Dist: scikit-learn>=1.3
 Requires-Dist: tiktoken>=0.7
+Requires-Dist: fastapi>=0.100
+Requires-Dist: uvicorn>=0.20
 Provides-Extra: agent
 Requires-Dist: openai>=1.40; extra == "agent"
 Requires-Dist: anthropic>=0.34; extra == "agent"
