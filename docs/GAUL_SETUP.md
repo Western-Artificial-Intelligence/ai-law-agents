@@ -32,13 +32,24 @@ If the script fails, use WinSCP or FileZilla to copy the `ai-law-agents` folder 
    cd ai-law-agents
    ```
 
-3. **Run the setup script**:
+3. **(Optional) Configure Groq API keys**:
+   If you plan to run Groq-backed batches, create a local `.env` on GAUL before setup:
+   ```bash
+   cat <<'EOF' > .env
+   GROQ_API_KEYS='["key1","key2","key3"]'
+   # Optional per-key limits
+   GROQ_API_KEY_CONCURRENCY='{"key1":2,"key2":2}'
+   EOF
+   ```
+   The setup script will source `.env` if present and validate the key pool.
+
+4. **Run the setup script**:
    ```bash
    chmod +x scripts/setup_gaul.sh
    ./scripts/setup_gaul.sh
    ```
 
-4. **Authenticate with Hugging Face**:
+5. **Authenticate with Hugging Face**:
    *Required for Llama-3 models.*
    
    **Prerequisite**: You must accept the license agreement at [https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct](https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct).
