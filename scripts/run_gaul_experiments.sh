@@ -22,7 +22,7 @@ echo "   Manifest: $MANIFEST_FILE"
 
 # Run with nohup to keep running if disconnected
 # We use the 'local' backend configuration from gaul_batch.yaml
-nohup python scripts/run_trial_matrix.py \
+nohup python -u scripts/run_trial_matrix.py \
     --config configs/gaul_batch.yaml \
     --out "$LOG_FILE" \
     --manifest "$MANIFEST_FILE" \

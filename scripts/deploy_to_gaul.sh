@@ -9,7 +9,7 @@ if [ -z "$1" ]; then
 fi
 
 USER=$1
-HOST="compute.gaul.csd.uwo.ca"
+HOST="gpu1.gaul.csd.uwo.ca"
 REMOTE_DIR="~/ai-law-agents"
 
 echo "🚀 Deploying to $USER@$HOST..."

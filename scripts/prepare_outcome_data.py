@@ -10,10 +10,10 @@ def verdict_to_bin(v: Any) -> int | None:
     if v is None:
         return None
     s = str(v).lower().strip()
-    if s == "guilty":
-        return 1
-    if s in ("not_guilty", "not guilty"):
+    if "not guilty" in s or "not_guilty" in s:
         return 0
+    if "guilty" in s:
+        return 1
     return None
 
 

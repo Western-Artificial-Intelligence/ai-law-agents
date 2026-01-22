@@ -22,9 +22,9 @@ If the script fails, use WinSCP or FileZilla to copy the `ai-law-agents` folder 
 
 ## 2. Setup on GAUL
 
-1. **SSH into GAUL**:
+1. **SSH into GAUL GPU Node**:
    ```bash
-   ssh your_username@compute.gaul.csd.uwo.ca
+   ssh your_username@gpu1.gaul.csd.uwo.ca
    ```
 
 2. **Navigate to the directory**:
@@ -37,7 +37,17 @@ If the script fails, use WinSCP or FileZilla to copy the `ai-law-agents` folder 
    chmod +x scripts/setup_gaul.sh
    ./scripts/setup_gaul.sh
    ```
-   *This will create a virtual environment and install all dependencies including PyTorch with CUDA support.*
+
+4. **Authenticate with Hugging Face**:
+   *Required for Llama-3 models.*
+   
+   **Prerequisite**: You must accept the license agreement at [https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct](https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct).
+   
+   ```bash
+   source .venv/bin/activate
+   huggingface-cli login
+   # Paste your HF token when prompted (get it from https://huggingface.co/settings/tokens)
+   ```
 
 ## 3. Running Experiments
 

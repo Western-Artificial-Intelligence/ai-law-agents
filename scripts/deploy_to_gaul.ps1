@@ -6,7 +6,7 @@ param (
     [string]$Username
 )
 
-$HostName = "compute.gaul.csd.uwo.ca"
+$HostName = "gpu1.gaul.csd.uwo.ca"
 $RemoteDir = "~/ai-law-agents"
 
 Write-Host "🚀 Deploying to $Username@$HostName..." -ForegroundColor Cyan
@@ -24,7 +24,7 @@ foreach ($Item in $Items) {
     if (Test-Path $Item) {
         Write-Host "   Uploading $Item..."
         # -r for recursive, -p for preserving modification times
-        scp -r -p $Item "$Username@$HostName`:$RemoteDir/"
+        scp -r -p $Item "${Username}@${HostName}:${RemoteDir}/"
     } else {
         Write-Warning "   Skipping $Item (not found)"
     }
