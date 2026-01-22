@@ -34,11 +34,24 @@ fi
 # 3. Activate Venv
 source .venv/bin/activate
 
-# 4. Upgrade pip
+# 4. Load optional Groq API keys from .env
+if [ -f ".env" ]; then
+    echo "Loading Groq API keys from .env..."
+    set -a
+    source .env
+    set +a
+else
+    echo "No .env found. To use Groq multi-key, create .env with:"
+    echo "  GROQ_API_KEYS='[\"key1\",\"key2\",\"key3\"]'"
+    echo "Optional per-key limits:"
+    echo "  GROQ_API_KEY_CONCURRENCY='{\"key1\":2,\"key2\":2}'"
+fi
+
+# 5. Upgrade pip
 echo "⬆️ Upgrading pip..."
 pip install --upgrade pip
 
-# 5. Install Dependencies
+# 6. Install Dependencies
 echo "📥 Installing dependencies..."
 # Install core package with analysis and agent extras
 pip install -e ".[analysis,agent]"
@@ -49,10 +62,20 @@ echo "📥 Installing PyTorch and Transformers for GPU support..."
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 pip install transformers accelerate bitsandbytes
 
-# 6. Verify Install
+# 7. Verify Install
 echo "🔍 Verifying installation..."
 python -c "import torch; print(f'PyTorch: {torch.__version__}, CUDA: {torch.cuda.is_available()}')"
 python -c "import bailiff; print(f'Bailiff: {bailiff.__file__}')"
+if [ -n "$GROQ_API_KEYS" ] || [ -n "$GROQ_API_KEY" ]; then
+    echo "Checking GroqKeyPool configuration..."
+    python - <<'PY'
+from bailiff.agents.groq_pool import GroqKeyPool
+
+pool = GroqKeyPool.from_env()
+print("GroqKeyPool initialized with", len(pool.summary()), "keys")
+print(pool.summary())
+PY
+fi
 
 echo "✅ Setup Complete! You can now run experiments."
 echo "   To activate: source .venv/bin/activate"
