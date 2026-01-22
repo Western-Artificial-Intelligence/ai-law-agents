@@ -10,10 +10,10 @@
 Update the GAUL setup script to support Groq API key configuration for the multikey runner service.
 
 ### Acceptance Criteria
-- [ ] Modify `scripts/setup_gaul.sh` to check for and source a `.env` file if present
-- [ ] Add a step that prompts user or documents how to create `.env` with `GROQ_API_KEYS`
-- [ ] Ensure the `.env` file is in `.gitignore` (security)
-- [ ] Test that `GroqKeyPool` initializes correctly on GAUL with the configured keys
+- [x] Modify `scripts/setup_gaul.sh` to check for and source a `.env` file if present
+- [x] Add a step that prompts user or documents how to create `.env` with `GROQ_API_KEYS`
+- [x] Ensure the `.env` file is in `.gitignore` (security)
+- [x] Test that `GroqKeyPool` initializes correctly on GAUL with the configured keys
 
 ### Technical Notes
 - Environment variable format: `GROQ_API_KEYS='["key1","key2","key3"]'` (JSON array)
@@ -70,11 +70,11 @@ concurrency: 1  # Start conservative, increase after testing
 Add periodic logging of Groq key pool status during batch experiment runs to help debug rate limiting issues.
 
 ### Acceptance Criteria
-- [ ] Import and access `GroqKeyPool` in the batch runner
-- [ ] Log pool summary at experiment start
-- [ ] Log pool summary periodically during runs (e.g., every 50 trials or 5 minutes)
-- [ ] Log pool summary at experiment end with totals
-- [ ] Include: keys in use, rate limit events, backoff states
+- [x] Import and access `GroqKeyPool` in the batch runner
+- [x] Log pool summary at experiment start
+- [x] Log pool summary periodically during runs (e.g., every 50 trials or 5 minutes)
+- [x] Log pool summary at experiment end with totals
+- [x] Include: keys in use, rate limit events, backoff states
 
 ### Technical Notes
 - `GroqKeyPool` has a `summary()` method that returns key status snapshots
@@ -96,11 +96,11 @@ Add periodic logging of Groq key pool status during batch experiment runs to hel
 Add documentation for setting up and using the Groq multikey runner on GAUL.
 
 ### Acceptance Criteria
-- [ ] Add "Optional: Groq Backend" section to `docs/GAUL_SETUP.md`
-- [ ] Document how to obtain and format Groq API keys
-- [ ] Document environment variable configuration
-- [ ] Include troubleshooting for common rate limit issues
-- [ ] Explain when to use Groq vs LOCAL backend
+- [x] Add "Optional: Groq Backend" section to `docs/GAUL_SETUP.md`
+- [x] Document how to obtain and format Groq API keys
+- [x] Document environment variable configuration
+- [x] Include troubleshooting for common rate limit issues
+- [x] Explain when to use Groq vs LOCAL backend
 
 ### Content to Include
 1. How to get Groq API keys (free tier)
@@ -124,11 +124,11 @@ Add documentation for setting up and using the Groq multikey runner on GAUL.
 Create a helper script to securely deploy Groq API keys to GAUL without committing them to git.
 
 ### Acceptance Criteria
-- [ ] Create `scripts/deploy_env_to_gaul.sh` (and `.ps1` for Windows)
-- [ ] Script should SCP `.env.local` to GAUL as `.env`
-- [ ] Validate `.env` format before deploying
-- [ ] Set correct file permissions (600) on remote
-- [ ] Print confirmation of successful deployment
+- [x] Create `scripts/deploy_env_to_gaul.sh` (and `.ps1` for Windows)
+- [x] Script should SCP `.env.local` to GAUL as `.env`
+- [x] Validate `.env` format before deploying
+- [x] Set correct file permissions (600) on remote
+- [x] Print confirmation of successful deployment
 
 ### Technical Notes
 - Use same SSH config as `deploy_to_gaul.sh`
