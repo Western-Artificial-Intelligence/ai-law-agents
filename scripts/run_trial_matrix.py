@@ -67,13 +67,31 @@ class GroqPoolLogger:
         self._last_log_count = 0
         self._last_log_time = time.monotonic()
         self._total_completed = 0
+        self._stop_event = threading.Event()
+        self._timer_thread: Optional[threading.Thread] = None
 
     def log_start(self, pool: GroqKeyPool) -> None:
-        _log_groq_pool(pool, "start", completed_pairs=self._total_completed)
+        with self._lock:
+            self._last_log_time = time.monotonic()
+            total = self._total_completed
+        _log_groq_pool(pool, "start", completed_pairs=total)
 
     def log_end(self, pool: GroqKeyPool) -> None:
         total = self._get_total()
         _log_groq_pool(pool, "end", completed_pairs=total)
+
+    def start_timer(self, pool: GroqKeyPool) -> None:
+        if self._timer_thread is not None:
+            return
+        self._stop_event.clear()
+        self._timer_thread = threading.Thread(target=self._run_timer, args=(pool,), daemon=True)
+        self._timer_thread.start()
+
+    def stop_timer(self) -> None:
+        self._stop_event.set()
+        if self._timer_thread is not None:
+            self._timer_thread.join()
+            self._timer_thread = None
 
     def record_completed(self, delta: int, pool: GroqKeyPool) -> None:
         now = time.monotonic()
@@ -95,6 +113,19 @@ class GroqPoolLogger:
     def _get_total(self) -> int:
         with self._lock:
             return self._total_completed
+
+    def _run_timer(self, pool: GroqKeyPool) -> None:
+        while not self._stop_event.wait(self._log_every_seconds):
+            self._log_if_due(pool)
+
+    def _log_if_due(self, pool: GroqKeyPool) -> None:
+        now = time.monotonic()
+        with self._lock:
+            if now - self._last_log_time < self._log_every_seconds:
+                return
+            self._last_log_time = now
+            total = self._total_completed
+        _log_groq_pool(pool, "progress", completed_pairs=total)
 
 
 @dataclass
@@ -456,6 +487,7 @@ def main() -> None:
         groq_pool = GroqKeyPool.from_env()
         groq_logger = GroqPoolLogger(GROQ_LOG_EVERY_COUNT, GROQ_LOG_EVERY_SECONDS)
         groq_logger.log_start(groq_pool)
+        groq_logger.start_timer(groq_pool)
 
     jobs: List[BatchJob] = []
     for case in cases:
@@ -492,6 +524,7 @@ def main() -> None:
                 print(f"[WARN] Job failed for {job.case.template.name} ({job.model.model_identifier}): {exc}")
 
     if groq_logger and groq_pool:
+        groq_logger.stop_timer()
         groq_logger.log_end(groq_pool)
 
     print(f"Completed {completed} paired assignments; manifest now has {len(manifest)} entries.")
