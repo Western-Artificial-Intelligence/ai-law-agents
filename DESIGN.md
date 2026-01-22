@@ -12,8 +12,10 @@ flowchart TD
   subgraph CLI
     RUN["scripts/run_pilot_trial.py"]
     BATCH["scripts/run_trial_matrix.py"]
+    ABL["scripts/run_ablation.py"]
     CFGY["configs/pilot.yaml"]
     CFGM["configs/batch.yaml"]
+    CFGA["configs/ablation_example.yaml"]
   end
 
   subgraph Data
@@ -56,8 +58,10 @@ flowchart TD
 
   RUN --> TP
   BATCH --> TP
+  ABL --> TP
   CFGY --> TP
   CFGM --> BATCH
+  CFGA --> ABL
   CUE --> TP
   CT --> TP
   PLC --> TP
@@ -97,6 +101,7 @@ flowchart LR
 - VERDICT/AUDIT: judge speaks (with optional blinding)
 
 ## Beginner Onboarding
+
 - Install and run the pilot from README’s Quickstart.
 - Explore logs written to JSONL (`trial_id`, `utterances`, `verdict`, `cue_*`).
 - Use the examples in `docs/USER_GUIDE.md` to compute paired outcomes and byte shares.
@@ -104,32 +109,37 @@ flowchart LR
 - Add a new cue by extending `cue_catalog()` and referencing it in configs.
 
 ## Data Model (Key Fields)
+
 - Trial: `trial_id`, `case_identifier`, `model_identifier`, `cue_name`, `cue_condition` (control/treatment), `cue_value`, `block_key` (case×model), `is_placebo`, `seed`, `verdict`, `sentence`, `utterances[]`
 - Utterance: `role`, `phase`, `content`, `byte_count`, `token_count?`, `interruption?`, `objection_raised?`, `objection_ruling?`, `safety_triggered?`, `timestamp`, `tags[]`
 
 ## Event Tagging & Budgets
+
 - Byte budgets enforced per role; message caps enforced per phase.
 - Regex fallbacks tag objections (and sustain/overrule) and interruptions. For higher precision, consider structured JSON outputs from agents.
 - Judge blinding hides cue information from judge prompts and redacts cue value in case text.
 
 ## Pairing & Randomization
+
 - `RandomizationBlock` + `blockwise_permutations()` describe case×model×cue blocks (including placebo toggles) and yield shuffled control/treatment assignments per seed.
 - `TrialPipeline.assign_pairs()`/`assign_blocked_pairs()` stamp `cue_condition`, `cue_value`, `block_key`, and placebo metadata on `TrialConfig` objects before building each `PairPlan`.
 - `TrialPipeline.run_pair()` executes both sessions and returns logs for downstream metrics.
 
 ## Metrics (Recap)
+
 - Paired outcomes: McNemar log‑odds and flip rate (`bailiff/metrics/outcome.py`).
 - Procedural share: inverse‑variance weighted byte delta; objections summary; measurement‑error correction helpers (`bailiff/metrics/procedural.py`).
 - Tone: simple scoring + calibration utilities (`bailiff/metrics/tone.py`).
 
 ## Analysis Helpers
+
 - FDR control (BH), equivalence (TOST on log‑odds), randomization inference, and a lightweight wild bootstrap live in `bailiff/analysis/stats.py`.
 
 ## Extending
+
 - Backends: use `bailiff.agents.backends` for Groq/Gemini, or implement the `AgentBackend` protocol for local models.
 - Policies: add hooks to `TrialSession` for stricter guardrails (e.g., JSON‑constrained outputs, judge‑only blinding, role‑specific filters).
 - Cases: `bailiff.datasets.load_case_templates()` enumerates/validates YAML definitions (required fields + cue slots).
-
 
 ## Design Highlights
 
@@ -159,6 +169,7 @@ flowchart LR
 - Metrics: `bailiff/metrics/outcome.py`, `bailiff/metrics/procedural.py`
 - Data: `bailiff/datasets/templates.py`, `bailiff/datasets/cases/traffic.yaml`
 - Runner/Config: `scripts/run_pilot_trial.py`, `configs/pilot.yaml`
+- Ablation: `scripts/run_ablation.py`, `configs/ablation_example.yaml`, `docs/ABLATION_GUIDE.md`
 
 ## How to Run a Pilot
 

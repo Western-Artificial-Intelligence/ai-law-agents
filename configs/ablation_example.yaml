@@ -1,0 +1,190 @@
+# Example ablation configuration for B.A.I.L.I.F.F.
+# This file defines systematic variations of trial configurations to isolate
+# the impact of specific design choices on outcomes and procedural metrics.
+
+# Base configuration to start from
+base_config: configs/pilot.yaml
+
+# Number of trial pairs to run for each variation
+repetitions: 3
+
+# Output format: 'csv', 'markdown', or 'both'
+output_format: both
+
+# Ablation sweeps: each sweep tests a specific design dimension
+ablations:
+  # Sweep 1: Phase message budget variations
+  - name: phase_budget_sweep
+    description: "Test impact of message caps per phase on trial dynamics"
+    variations:
+      - name: tight_budgets
+        overrides:
+          phase_budgets:
+            opening:
+              max_messages: 1
+            direct:
+              max_messages: 1
+            cross:
+              max_messages: 1
+            closing:
+              max_messages: 1
+
+      - name: baseline_budgets
+        overrides:
+          phase_budgets:
+            opening:
+              max_messages: 2
+            direct:
+              max_messages: 2
+            cross:
+              max_messages: 2
+            closing:
+              max_messages: 2
+
+      - name: loose_budgets
+        overrides:
+          phase_budgets:
+            opening:
+              max_messages: 3
+            direct:
+              max_messages: 3
+            cross:
+              max_messages: 3
+            closing:
+              max_messages: 3
+
+  # Sweep 2: Agent byte budget variations
+  - name: agent_budget_sweep
+    description: "Test impact of per-agent byte limits on verbosity and outcomes"
+    variations:
+      - name: constrained_agents
+        overrides:
+          agent_budgets:
+            judge:
+              max_bytes: 1000
+              max_tokens: 400
+            prosecution:
+              max_bytes: 1200
+              max_tokens: 500
+            defense:
+              max_bytes: 1200
+              max_tokens: 500
+
+      - name: standard_agents
+        overrides:
+          agent_budgets:
+            judge:
+              max_bytes: 1500
+              max_tokens: 600
+            prosecution:
+              max_bytes: 1800
+              max_tokens: 700
+            defense:
+              max_bytes: 1800
+              max_tokens: 700
+
+      - name: generous_agents
+        overrides:
+          agent_budgets:
+            judge:
+              max_bytes: 2500
+              max_tokens: 1000
+            prosecution:
+              max_bytes: 3000
+              max_tokens: 1200
+            defense:
+              max_bytes: 3000
+              max_tokens: 1200
+
+  # Sweep 3: Blinding mode variations
+  - name: blinding_sweep
+    description: "Test impact of judge blinding on bias mitigation"
+    variations:
+      - name: no_blinding
+        overrides:
+          judge_blinding: false
+          strict_blinding: false
+
+      - name: standard_blinding
+        overrides:
+          judge_blinding: true
+          strict_blinding: false
+
+      - name: strict_blinding
+        overrides:
+          judge_blinding: true
+          strict_blinding: true
+
+  # Sweep 4: Policy enforcement variations
+  - name: policy_enforcement_sweep
+    description: "Test impact of role-phase policy enforcement"
+    variations:
+      - name: lenient_policy
+        overrides:
+          enforce_role_phase_policy: false
+          phase_budgets:
+            opening:
+              allow_interruptions: true
+            direct:
+              allow_interruptions: true
+            cross:
+              allow_interruptions: true
+
+      - name: strict_policy
+        overrides:
+          enforce_role_phase_policy: true
+          phase_budgets:
+            opening:
+              allow_interruptions: false
+            direct:
+              allow_interruptions: false
+            cross:
+              allow_interruptions: false
+
+  # Sweep 5: Combined variations (interaction effects)
+  - name: interaction_sweep
+    description: "Test interaction between blinding and budget constraints"
+    variations:
+      - name: tight_budget_no_blind
+        overrides:
+          judge_blinding: false
+          agent_budgets:
+            judge:
+              max_bytes: 1000
+            prosecution:
+              max_bytes: 1200
+            defense:
+              max_bytes: 1200
+
+      - name: tight_budget_with_blind
+        overrides:
+          judge_blinding: true
+          agent_budgets:
+            judge:
+              max_bytes: 1000
+            prosecution:
+              max_bytes: 1200
+            defense:
+              max_bytes: 1200
+
+      - name: loose_budget_no_blind
+        overrides:
+          judge_blinding: false
+          agent_budgets:
+            judge:
+              max_bytes: 2500
+            prosecution:
+              max_bytes: 3000
+            defense:
+              max_bytes: 3000
+
+      - name: loose_budget_with_blind
+        overrides:
+          judge_blinding: true
+          agent_budgets:
+            judge:
+              max_bytes: 2500
+            prosecution:
+              max_bytes: 3000
+            defense:
+              max_bytes: 3000
