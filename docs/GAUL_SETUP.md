@@ -105,3 +105,46 @@ The experiment is configured in `configs/gaul_batch.yaml`:
 - **Cues**: Black, Chinese, Indian names vs. White control
 - **Seeds**: 30 replications per case/cue pair
 - **Backend**: Local Llama-3-8B (running on GAUL GPU)
+
+## Optional: Groq Backend
+Use Groq when you want faster iteration or to avoid tying up GAUL GPUs. Use LOCAL when you need GPU-local models, deterministic offline runs, or to avoid external API limits.
+
+### 1. Get Groq API keys
+1. Create a free Groq account and generate API keys.
+2. Keep keys out of git by storing them in a local `.env.local`.
+
+### 2. Format keys for multi-key runner
+In `.env.local`, set a JSON list of keys:
+```bash
+GROQ_API_KEYS='["key1","key2","key3"]'
+```
+Optional per-key limits (recommended for free tier):
+```bash
+GROQ_API_KEY_CONCURRENCY='{"key1":1,"key2":1}'
+```
+Suggested starting point: 1 concurrent request per key. Increase only if Groq dashboard limits allow it.
+
+### 3. Securely transfer keys to GAUL
+Use the helper script (recommended):
+```bash
+./scripts/deploy_env_to_gaul.sh your_username
+```
+This uploads `.env.local` as `~/ai-law-agents/.env` and sets permissions to `600`.
+
+### 4. Run Groq-backed batches
+Update `configs/gaul_batch.yaml` to use `backend: groq` and a Groq model (e.g., `llama3-8b-8192`), then run:
+```bash
+./scripts/run_gaul_experiments.sh
+```
+
+### 5. Monitor key pool health
+The batch runner logs Groq key pool status at start, periodically, and at the end. Look for `[GROQ]` entries in the execution log for:
+- inflight requests
+- rate limit streaks
+- backoff remaining
+- total uses
+
+### Troubleshooting rate limits
+- If you see repeated backoffs or long delays, reduce concurrency to 1 per key.
+- Verify `GROQ_API_KEYS` is valid JSON (no trailing commas).
+- Ensure key limits match your Groq dashboard quotas.
