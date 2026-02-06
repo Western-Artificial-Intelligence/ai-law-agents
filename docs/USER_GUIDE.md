@@ -55,38 +55,34 @@ done at once to that API key. (see "Install" above for formatting)
 
 ## Structured verdict output
 
-<<<<<<< HEAD
-
 - The judge prompt now requires the VERDICT phase to start with JSON `{"verdict":"guilty|not_guilty","sentence":<value>}` before any prose.
-- # `TrialSession` extracts the JSON when present and falls back to the legacy keyword/regex parsing so older logs stay compatible.
-- The judge prompt now requires the VERDICT phase to start with JSON {"verdict":"guilty|not_guilty","sentence":<value>} before any prose.
-- Judge agents must start every VERDICT-phase utterance with a JSON object such as {"verdict": "guilty", "sentence": 24} so \_parse_and_set_verdict_sentence() can populate TrialLog.verdict/sentence.
-- TrialSession extracts the JSON when present and falls back to the legacy keyword/regex parsing so older logs stay compatible.
+- Judge agents should start every VERDICT-phase utterance with a JSON object such as `{"verdict":"guilty","sentence":24}` so verdict parsing can populate `TrialLog.verdict`/`sentence`.
+- `TrialSession` extracts the JSON when present and falls back to legacy keyword/regex parsing so older logs stay compatible.
 
 ## Local backend options
 
-- Use --backend local for offline inference. It defaults to Hugging Face transformers; provide --backend-param model_name=<hf-id> (and optional --backend-param device=cuda:0) to select the checkpoint/device.
-- Switch to llama.cpp by adding --backend-param provider=llama_cpp --backend-param model_path=/path/to/model.gguf plus optional --backend-param n_ctx=4096 --backend-param n_threads=8.
+- Use `--backend local` for offline inference. It defaults to Hugging Face transformers; provide `--backend-param model_name=<hf-id>` and optional `--backend-param device=cuda:0` to select checkpoint/device.
+- Enable quantized transformers loading with `--backend-param load_in_4bit=true` (recommended on low-VRAM GPUs).
+- Switch to `llama.cpp` by adding `--backend-param provider=llama_cpp --backend-param model_path=/path/to/model.gguf` plus optional `--backend-param n_ctx=4096 --backend-param n_threads=8`.
 - Batch configs can mix and match:
 
-`yaml
+```yaml
 models:
-
 - backend: local
   model: distilgpt2
   params:
-  provider: transformers
-  model_name: distilgpt2
-  temperature: 0.4
+    provider: transformers
+    model_name: distilgpt2
+    load_in_4bit: true
+    temperature: 0.4
 - backend: local
   model: models/llama-3b.gguf
   params:
-  provider: llama_cpp
-  model_path: models/llama-3b.gguf
-  n_ctx: 4096
-  n_threads: 8
-  `
-  > > > > > > > main
+    provider: llama_cpp
+    model_path: models/llama-3b.gguf
+    n_ctx: 4096
+    n_threads: 8
+```
 
 ## Multi-case loop (Python)
 
@@ -339,3 +335,4 @@ Lower flip rates and smaller deltas suggest the configuration reduces bias.
 - Full ablation guide: `docs/ABLATION_GUIDE.md`
 - Example config: `configs/ablation_example.yaml`
 - Demo script: `scripts/demo_ablation.sh`
+- FIR/Compute Alliance setup: `docs/FIR_SETUP.md`

@@ -68,6 +68,9 @@ class TokenBudget:
         if not role_budget:
             return
 
+        if role_budget.max_tokens is None:
+            return
+
         if role_usage.total_tokens > role_budget.max_tokens:
             self._alert(
                 level="ERROR",
@@ -82,7 +85,7 @@ class TokenBudget:
         alert = {
             "timestamp": datetime.utcnow().isoformat(),
             "level": level,
-            "role": role.value,
+            "role": role.name,
             "message": message,
             "usage": usage,
         }
@@ -99,12 +102,12 @@ class TokenBudget:
             "timestamp": datetime.utcnow().isoformat(),
             "trial_id": getattr(self.config, "trial_id", "unknown"),
             "usage": {
-                role.value: asdict(usage)
+                role.name: asdict(usage)
                 for role, usage in self.usage.items()
             },
             "alerts": self.alerts,
             "budgets": {
-                role.value: {"max_tokens": budget.max_tokens}
+                role.name: {"max_tokens": budget.max_tokens}
                 for role, budget in self.config.role_budgets.items()
             }
             if hasattr(self.config, "role_budgets")
@@ -139,7 +142,7 @@ class TokenBudgetEnforcer:
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         # Save summary on exit if output directory is configured
-        if hasattr(self.budget.config, "output_dir"):
+        if getattr(self.budget.config, "output_dir", None):
             try:
                 output_path = self.budget.save_summary(self.budget.config.output_dir)
                 logging.info(f"Token usage summary saved to {output_path}")

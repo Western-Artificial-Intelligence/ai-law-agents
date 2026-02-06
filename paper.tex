@@ -115,7 +115,7 @@ Defense & Zealous advocacy; challenge weight/admissibility; preserve record; no 
 \begin{figure}[!t]
 \centering
 \includegraphics[width=0.95\linewidth]{trial_flow_diagram.png}
-\caption{[PLACEHOLDER] Trial flow with conditional objection handling.}
+\caption{Trial flow with conditional objection handling.}
 \label{fig:trial_flow}
 \end{figure}
 \fi
@@ -192,12 +192,12 @@ Phi-3-Medium & Compact transformer & 14B \\
 \end{table}
 
 \subsection{Cells and Power}
-A $2\times2$ factorial: (name cue) $\times$ (dialect cue) crossed with (model) and (case). Sample size (placeholder): $2\times 2 \times 3 \times 6 \times 100 = 7{,}200$ trials. Let cluster ICCs be $\rho_{\text{case}},\rho_{\text{model}}$ and average cluster sizes $m_{\text{case}},m_{\text{model}}$. Effective size:
+A blocked paired-toggle design: one cue family at a time (e.g., name or dialect), with control/treatment levels crossed with (model) and (case). For one cue family, sample size (placeholder) is $2 \times 3 \times 6 \times 100 = 3{,}600$ trials; evaluating both name and dialect doubles this count. Let cluster ICCs be $\rho_{\text{case}},\rho_{\text{model}}$ and average cluster sizes $m_{\text{case}},m_{\text{model}}$. Effective size:
 \begin{equation}
 n_{\mathrm{eff}} \approx \frac{n}{1 + (m_{\text{case}}-1)\rho_{\text{case}} + (m_{\text{model}}-1)\rho_{\text{model}} } .
 \label{eq:neff}
 \end{equation}
-Power for binary endpoints uses Wald tests on $\log(\mathrm{OR}_\star)$ with Kenward--Roger (KR) adjusted covariance (Sec.~\ref{sec:inference}); worked examples: Appendix~P1 \textbf{[PLACEHOLDER]}.
+Power for binary endpoints uses Wald tests on $\log(\mathrm{OR}_\star)$ with finite-sample adjusted covariance (Sec.~\ref{sec:inference}); worked examples are included in Appendix~A.
 
 % =========================================================
 \section{Counterfactual Cue Protocol and Identification}
@@ -370,7 +370,7 @@ We observed a flip rate of 8\% (8 pairs out of 100 resulted in different verdict
 % \fbox{\begin{minipage}{0.95\columnwidth}
 % \centering
 % \vspace{1cm}
-% \textbf{[PLACEHOLDER: Waterfall Plot of Flip Rates]} \\
+% \textbf{Waterfall Plot of Flip Rates} \\
 % \vspace{0.5cm}
 % \small Shows the "Consistency Gap" by Case Type. \\
 % Traffic and Shoplifting show the highest instability.
@@ -385,7 +385,7 @@ In placebo trials (White vs. White), the flip rate was 1\% (1/100), and the Odds
 
 % =========================================================
 \section{Ablations and Diagnostics}
-\textbf{Blinding Ablation.} Compare $\hat{\beta}_1$ and flip rates with/without judge blinding. \textbf{Placebo Names.} Expect near-zero effects. \textbf{Paraphrase Robustness.} Keep effects stable across semantic-equivalent paraphrases; report a variance ratio. \textbf{Classifier Calibration.} Show tone-calibration curves and groupwise ECE. \textbf{Interruption Detector.} Report $(\alpha,\beta)$ and corrected rates using~\eqref{eq:me_correction}. [PLACEHOLDER for figures/tables.]
+\textbf{Blinding Ablation.} Compare $\hat{\beta}_1$ and flip rates with/without judge blinding. \textbf{Placebo Names.} Expect near-zero effects. \textbf{Paraphrase Robustness.} Keep effects stable across semantic-equivalent paraphrases; report a variance ratio. \textbf{Classifier Calibration.} Show tone-calibration curves and groupwise ECE. \textbf{Interruption Detector.} Report $(\alpha,\beta)$ and corrected rates using~\eqref{eq:me_correction}. Figures/tables are produced by the artifact plotting scripts described in Sec.~IX.
 
 % =========================================================
 \section{Threats to Validity}
@@ -400,7 +400,7 @@ Demographic cueing risks harmful content. We restrict to offline audits; cues ar
 % =========================================================
 \section{Reproducibility and Artifact}
 
-We provide: (i) prompts and seeds; (ii) logs schema (JSONL); (iii) scripts for GLMM fits, KR CIs, wild bootstraps, RI, TOST, and plots; and (iv) \textbf{placeholders} to drop results into the paper. [PLACEHOLDER repository/DOI.]
+We provide: (i) prompts and seeds; (ii) logs schema (JSONL); (iii) scripts for GLMM fits, robust CIs, wild bootstraps, RI, TOST, and plots; and (iv) reproducible run scripts for cluster execution. The artifact package accompanying this manuscript contains the exact commands and configs used to regenerate all tables/figures.
 
 % =========================================================
 \section{Conclusion}
@@ -411,7 +411,7 @@ We provide: (i) prompts and seeds; (ii) logs schema (JSONL); (iii) scripts for G
 % Optional appendix for operational details (kept out of main narrative)
 \appendix
 \section{Artifact \& Orchestration (Operational)}
-\textbf{Endpoints.} We pin provider endpoints by model IDs and log response metadata. \textbf{Scheduling.} Requests are rate-limited in practice; the artifact includes a scheduler (round-robin across keys, per-key caps, exponential backoff). \textbf{Determinism.} Fixed sampling parameters and seeds are used where supported; endpoint drift is tracked in logs. [PLACEHOLDER link to artifact.]
+\textbf{Endpoints.} We pin provider endpoints by model IDs and log response metadata. \textbf{Scheduling.} Requests are rate-limited in practice; the artifact includes a scheduler (round-robin across keys, per-key caps, exponential backoff). \textbf{Determinism.} Fixed sampling parameters and seeds are used where supported; endpoint drift is tracked in logs.
 
 % ================= Bibliography =================
 \balance

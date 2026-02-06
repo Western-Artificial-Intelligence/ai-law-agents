@@ -99,6 +99,31 @@ class EchoBackend:
         return f"[ECHO]\n{prompt}"
 
 
+def _as_bool(value: object, *, field_name: str) -> bool:
+    """Coerce common bool-like CLI/YAML values into bool."""
+
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        norm = value.strip().lower()
+        if norm in {"1", "true", "yes", "y", "on"}:
+            return True
+        if norm in {"0", "false", "no", "n", "off"}:
+            return False
+    raise SystemExit(f"Invalid boolean for {field_name}: {value!r}")
+
+
+def _parse_backend_param(value: str) -> object:
+    """Parse backend-param values as JSON scalars when possible."""
+
+    try:
+        return json.loads(value)
+    except Exception:
+        return value
+
+
 def _load_backend(
     choice: Backend,
     model_identifier: str,
@@ -153,9 +178,12 @@ def _load_backend(
         device = runtime_params.pop("device", None)
         if device is not None:
             metadata.setdefault("device", device)
+        load_in_4bit = _as_bool(runtime_params.pop("load_in_4bit", False), field_name="load_in_4bit")
+        metadata.setdefault("load_in_4bit", load_in_4bit)
         return LocalTransformersBackend(
             model_name_or_path=model_name,
             device=device,
+            load_in_4bit=load_in_4bit,
             enforce_budget=enforce_budget,
         )
     raise SystemExit(f"Unsupported backend choice: {choice.value}")
@@ -233,7 +261,7 @@ def parse_args() -> tuple[dict[str, object], dict[str, object]]:
             if "=" not in item:
                 raise SystemExit(f"Invalid --backend-param '{item}', expected key=value")
             key, value = item.split("=", 1)
-            param_dict[key] = value
+            param_dict[key] = _parse_backend_param(value)
         parsed["backend_params"] = param_dict
     return parsed, token_cli
 

@@ -32,6 +32,22 @@ GROQ_LOG_EVERY_COUNT = 50
 GROQ_LOG_EVERY_SECONDS = 300.0
 
 
+def _as_bool(value: object, *, field_name: str) -> bool:
+    """Coerce common bool-like values into bool."""
+
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        norm = value.strip().lower()
+        if norm in {"1", "true", "yes", "y", "on"}:
+            return True
+        if norm in {"0", "false", "no", "n", "off"}:
+            return False
+    raise BackendUnavailable(f"Invalid boolean for {field_name}: {value!r}")
+
+
 def _summarize_groq_pool(summary: List[Dict[str, object]]) -> Dict[str, object]:
     inflight_total = sum(int(item.get("inflight", 0)) for item in summary)
     keys_in_use = sum(1 for item in summary if int(item.get("inflight", 0)) > 0)
@@ -308,7 +324,12 @@ def load_backend(
         if not model_name:
             raise BackendUnavailable("model_name is required for transformers local backend.")
         device = runtime_params.pop("device", None)
-        return LocalTransformersBackend(model_name_or_path=model_name, device=device)
+        load_in_4bit = _as_bool(runtime_params.pop("load_in_4bit", False), field_name="load_in_4bit")
+        return LocalTransformersBackend(
+            model_name_or_path=model_name,
+            device=device,
+            load_in_4bit=load_in_4bit,
+        )
     raise BackendUnavailable(f"Unsupported backend choice: {backend}")
 
 

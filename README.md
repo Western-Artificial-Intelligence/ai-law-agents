@@ -64,6 +64,8 @@ During the VERDICT phase the judge agent must begin its response with a JSON obj
 - Outcome scripts (GLMM, GEE+Satterthwaite, wild cluster bootstrap): `docs/OUTCOME_SCRIPTS.md`
 - Local backend reference: `docs/USER_GUIDE.md#local-backend-options`
 - **Running on GAUL Cluster**: `docs/GAUL_SETUP.md`
+- **Running on FIR / Compute Alliance**: `docs/FIR_SETUP.md`
+- **Paper readiness checklist**: `docs/PAPER_READINESS.md`
 
 ## Groq key pool
 - `GroqBackend` now pulls from a pool of keys and rotates to the least-used key that has spare concurrency.

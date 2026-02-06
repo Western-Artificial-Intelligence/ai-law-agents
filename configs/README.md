@@ -7,6 +7,7 @@ This directory contains YAML configuration files for different B.A.I.L.I.F.F. wo
 - **`pilot.yaml`**: Single paired trial configuration for quick testing
 - **`batch.yaml`**: Multi-case/multi-model matrix configuration
 - **`ablation_example.yaml`**: Example ablation study with 5 sweep types
+- **`fir_batch.yaml`**: FIR/Compute-Alliance batch configuration for paper-scale runs
 
 ## Quick Reference
 

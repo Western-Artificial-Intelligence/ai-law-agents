@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +33,7 @@ class TrialSession:
     _tokens_used: Dict[Role, int] = field(default_factory=dict, init=False, repr=False)
     _case_text: Optional[str] = field(default=None, init=False, repr=False)
     _tokenizer: Optional[Tokenizer] = field(default=None, init=False, repr=False)
+    _policy_violations: Dict[str, int] = field(default_factory=dict, init=False, repr=False)
 
     def run(self) -> TrialLog:
         """Execute the state machine and return the populated trial log."""
@@ -39,6 +41,7 @@ class TrialSession:
         self._log = self.log_factory(self.config)
         self._bytes_used = {role: 0 for role in Role}
         self._tokens_used = {role: 0 for role in Role}
+        self._policy_violations = {}
         self._tokenizer = Tokenizer(self.config.model_identifier)
         self._case_text = self._load_and_render_case()
         
@@ -54,7 +57,7 @@ class TrialSession:
                     hook(self._log)
                     
             # Save token usage summary if output directory is configured
-            if hasattr(self.config, 'output_dir'):
+            if self.config.output_dir:
                 try:
                     output_path = budget_tracker.save_summary(self.config.output_dir)
                     logging.info(f"Token usage summary saved to {output_path}")
@@ -113,10 +116,6 @@ class TrialSession:
         responder = self.responders[role]
         prompt = self._build_prompt(role, phase)
         return responder(role, phase, prompt)
-
-    def _build_prompt(self, role: Role, phase: Phase) -> str:
-        """Construct the shared prompt context passed to an agent responder."""
-
 
     def _build_prompt(self, role: Role, phase: Phase) -> str:
         """Construct the shared prompt context passed to an agent responder.

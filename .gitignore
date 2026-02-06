@@ -26,6 +26,7 @@ bailiff.egg-info/
 trial_logs*.*
 outcomes.csv
 bootstrap.json
+runs/
 
 # build directory
 build/

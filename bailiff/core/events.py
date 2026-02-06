@@ -51,9 +51,9 @@ class TrialLog:
     cue_name: str
     cue_condition: Optional[str]
     cue_value: Optional[str]
-    seed: int
-    started_at: datetime
-    completed_at: Optional[datetime]
+    seed: int = 0
+    started_at: datetime = field(default_factory=datetime.utcnow)
+    completed_at: Optional[datetime] = None
     backend_name: Optional[str] = None
     model_parameters: Dict[str, object] = field(default_factory=dict)
     block_key: Optional[str] = None

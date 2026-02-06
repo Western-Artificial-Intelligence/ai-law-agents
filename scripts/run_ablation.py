@@ -36,11 +36,9 @@ from bailiff.agents.prompts import prompt_for
 from bailiff.core.config import AgentBudget, CueToggle, Phase, PhaseBudget, Role, TrialConfig
 from bailiff.core.events import TrialLog
 from bailiff.core.io import append_jsonl, compute_prompt_hash
-from bailiff.datasets.templates import cue_catalog, load_case_templates
+from bailiff.datasets.templates import cue_catalog
 from bailiff.orchestration.pipeline import TrialPipeline
-from bailiff.orchestration.randomization import blockwise_permutations, RandomizationBlock
-from bailiff.metrics.outcome import flip_rate, PairedOutcome
-from bailiff.metrics.procedural import ShareRecord, aggregate_share
+from bailiff.orchestration.randomization import RandomizationBlock, blockwise_permutations
 
 load_dotenv()
 
@@ -177,19 +175,20 @@ def load_base_config(config_path: Path) -> TrialConfig:
     """Load the base trial configuration from YAML."""
     with open(config_path) as f:
         data = yaml.safe_load(f)
-    
+
     # Parse case template
     case_template_rel = data.get("case_template", "cases/traffic.yaml")
-    if not case_template_rel.startswith("bailiff/"):
-        case_template_rel = f"bailiff/datasets/{case_template_rel}"
     case_template = Path(case_template_rel)
-    
+    if not case_template.is_absolute():
+        if not str(case_template).startswith("bailiff/"):
+            case_template = Path(f"bailiff/datasets/{case_template}")
+        case_template = case_template.resolve()
+
     # Parse cue
     cue_key = data.get("cue", "name_ethnicity")
-    cue_dict = cue_catalog().get(cue_key)
-    if not cue_dict:
+    cue = cue_catalog().get(cue_key)
+    if cue is None:
         raise ValueError(f"Unknown cue key: {cue_key}")
-    cue = CueToggle(**cue_dict)
     
     # Parse budgets
     agent_budgets = {}
@@ -253,11 +252,13 @@ def run_ablation_trial(
     block = RandomizationBlock(
         case_identifier=config.case_template.stem,
         model_identifier=config.model_identifier,
-        cue_toggles=[config.cue],
-        placebo_toggles=[],
+        cue_name=config.cue.name,
+        values=[config.cue.control_value, config.cue.treatment_value],
+        seeds=[varied_config.seed],
+        is_placebo=False,
     )
-    
-    assignments = list(blockwise_permutations([block], n_replicates=1, base_seed=varied_config.seed))
+
+    assignments = list(blockwise_permutations([block]))
     
     # Generate and run pair
     pairs = list(pipeline.assign_pairs(varied_config, assignments))
@@ -273,17 +274,22 @@ def extract_metrics(control_log: TrialLog, treatment_log: TrialLog) -> Dict[str,
     metrics = {}
     
     # Verdict outcomes
-    control_verdict = 1 if control_log.verdict == "guilty" else 0
-    treatment_verdict = 1 if treatment_log.verdict == "guilty" else 0
+    control_verdict = 1 if str(control_log.verdict) == "guilty" else 0
+    treatment_verdict = 1 if str(treatment_log.verdict) == "guilty" else 0
     metrics["control_verdict"] = control_log.verdict or "unknown"
     metrics["treatment_verdict"] = treatment_log.verdict or "unknown"
     metrics["verdict_flip"] = control_verdict != treatment_verdict
     
     # Sentence comparison
     if control_log.sentence is not None and treatment_log.sentence is not None:
-        metrics["control_sentence"] = control_log.sentence
-        metrics["treatment_sentence"] = treatment_log.sentence
-        metrics["sentence_delta"] = treatment_log.sentence - control_log.sentence
+        control_sentence = _parse_numeric_sentence(control_log.sentence)
+        treatment_sentence = _parse_numeric_sentence(treatment_log.sentence)
+        metrics["control_sentence"] = control_sentence
+        metrics["treatment_sentence"] = treatment_sentence
+        if control_sentence is not None and treatment_sentence is not None:
+            metrics["sentence_delta"] = treatment_sentence - control_sentence
+        else:
+            metrics["sentence_delta"] = None
     else:
         metrics["control_sentence"] = None
         metrics["treatment_sentence"] = None
@@ -305,8 +311,8 @@ def extract_metrics(control_log: TrialLog, treatment_log: TrialLog) -> Dict[str,
     
     # Utterance counts by role
     for role in [Role.JUDGE, Role.PROSECUTION, Role.DEFENSE]:
-        control_count = sum(1 for u in control_log.utterances if u.role == role.value)
-        treatment_count = sum(1 for u in treatment_log.utterances if u.role == role.value)
+        control_count = sum(1 for u in control_log.utterances if _role_name(u.role) == role.value)
+        treatment_count = sum(1 for u in treatment_log.utterances if _role_name(u.role) == role.value)
         metrics[f"control_{role.value}_utterances"] = control_count
         metrics[f"treatment_{role.value}_utterances"] = treatment_count
     
@@ -322,6 +328,25 @@ def extract_metrics(control_log: TrialLog, treatment_log: TrialLog) -> Dict[str,
     metrics["treatment_interruptions"] = treatment_interruptions
     
     return metrics
+
+
+def _parse_numeric_sentence(value: Any) -> Optional[float]:
+    """Parse sentence values into floats when possible."""
+
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value).strip())
+    except ValueError:
+        return None
+
+
+def _role_name(role: Any) -> str:
+    if isinstance(role, Role):
+        return role.value
+    return str(role)
 
 
 def run_ablation_study(
@@ -357,7 +382,7 @@ def run_ablation_study(
                     
                     # Save logs if output path provided
                     if output_jsonl:
-                        append_jsonl(output_jsonl, [control_log, treatment_log])
+                        append_jsonl([control_log, treatment_log], output_jsonl)
                     
                     # Extract metrics
                     metrics = extract_metrics(control_log, treatment_log)
@@ -381,37 +406,65 @@ def run_ablation_study(
 
 def generate_comparison_tables(results_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Generate summary comparison tables from ablation results."""
-    
-    # Aggregate by sweep and variation
-    summary = results_df.groupby(["sweep", "variation"]).agg({
-        "verdict_flip": ["mean", "sum"],
-        "sentence_delta": ["mean", "std"],
-        "token_delta": ["mean", "std"],
-        "byte_delta": ["mean", "std"],
-        "control_objections": "mean",
-        "treatment_objections": "mean",
-        "control_interruptions": "mean",
-        "treatment_interruptions": "mean",
-        "repetition": "count",
-    }).reset_index()
-    
-    # Flatten column names
-    summary.columns = ["_".join(col).strip("_") if col[1] else col[0] for col in summary.columns.values]
-    summary.rename(columns={"repetition_count": "n_trials"}, inplace=True)
-    
-    # Create a detailed comparison table
-    detail = results_df.groupby(["sweep", "variation"]).agg({
-        "control_verdict": lambda x: (x == "guilty").sum(),
-        "treatment_verdict": lambda x: (x == "guilty").sum(),
-        "verdict_flip": "sum",
-        "sentence_delta": ["mean", "std", "min", "max"],
-        "token_delta": ["mean", "std"],
-        "control_total_tokens": "mean",
-        "treatment_total_tokens": "mean",
-    }).reset_index()
-    
-    detail.columns = ["_".join(col).strip("_") if col[1] else col[0] for col in detail.columns.values]
-    
+
+    group_cols = ["sweep", "variation"]
+    grouped = results_df.groupby(group_cols)
+    cols = set(results_df.columns)
+
+    summary_aggs: Dict[str, Any] = {}
+    if "verdict_flip" in cols:
+        summary_aggs["verdict_flip"] = ["mean", "sum"]
+    if "sentence_delta" in cols:
+        summary_aggs["sentence_delta"] = ["mean", "std"]
+    if "token_delta" in cols:
+        summary_aggs["token_delta"] = ["mean", "std"]
+    if "byte_delta" in cols:
+        summary_aggs["byte_delta"] = ["mean", "std"]
+    if "control_objections" in cols:
+        summary_aggs["control_objections"] = "mean"
+    if "treatment_objections" in cols:
+        summary_aggs["treatment_objections"] = "mean"
+    if "control_interruptions" in cols:
+        summary_aggs["control_interruptions"] = "mean"
+    if "treatment_interruptions" in cols:
+        summary_aggs["treatment_interruptions"] = "mean"
+    if "repetition" in cols:
+        summary_aggs["repetition"] = "count"
+
+    if summary_aggs:
+        summary = grouped.agg(summary_aggs).reset_index()
+        summary.columns = ["_".join(col).strip("_") if col[1] else col[0] for col in summary.columns.values]
+    else:
+        summary = grouped.size().reset_index(name="n_trials")
+
+    if "repetition_count" in summary.columns:
+        summary = summary.rename(columns={"repetition_count": "n_trials"})
+    elif "n_trials" not in summary.columns:
+        counts = grouped.size().reset_index(name="n_trials")
+        summary = summary.merge(counts, on=group_cols, how="left")
+
+    detail_aggs: Dict[str, Any] = {}
+    if "control_verdict" in cols:
+        detail_aggs["control_verdict"] = lambda x: (x == "guilty").sum()
+    if "treatment_verdict" in cols:
+        detail_aggs["treatment_verdict"] = lambda x: (x == "guilty").sum()
+    if "verdict_flip" in cols:
+        detail_aggs["verdict_flip"] = "sum"
+    if "sentence_delta" in cols:
+        detail_aggs["sentence_delta"] = ["mean", "std", "min", "max"]
+    if "token_delta" in cols:
+        detail_aggs["token_delta"] = ["mean", "std"]
+    if "control_total_tokens" in cols:
+        detail_aggs["control_total_tokens"] = "mean"
+    if "treatment_total_tokens" in cols:
+        detail_aggs["treatment_total_tokens"] = "mean"
+
+    if detail_aggs:
+        detail = grouped.agg(detail_aggs).reset_index()
+        detail.columns = ["_".join(col).strip("_") if col[1] else col[0] for col in detail.columns.values]
+    else:
+        detail = grouped.size().reset_index(name="n_rows")
+
     return summary, detail
 
 
@@ -468,17 +521,25 @@ def main():
     ablation_config = parse_ablation_yaml(args.config)
     
     # Set up pipeline with Echo backend
-    from scripts.run_pilot_trial import EchoBackend, _load_backend, Backend
+    from scripts.run_pilot_trial import Backend, EchoBackend, _load_backend
     
     backend_choice = Backend(args.backend)
-    backend = EchoBackend() if backend_choice == Backend.ECHO else _load_backend(
-        backend_choice, args.model or "llama3-8b-8192", {}, {}
+    backend = (
+        EchoBackend()
+        if backend_choice == Backend.ECHO
+        else _load_backend(
+            backend_choice,
+            args.model or "llama3-8b-8192",
+            {},
+            {},
+            enforce_budget=False,
+        )
     )
-    
+
     retry_policy = RetryPolicy(
         timeout_seconds=30.0,
         max_retries=2,
-        backoff_seconds=1.0,
+        initial_backoff=1.0,
         backoff_multiplier=2.0,
         rate_limit_seconds=0.0,
     )
