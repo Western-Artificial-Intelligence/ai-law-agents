@@ -1,7 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=bailiff-batch
-#SBATCH --account=def-<your_alliance_pi>
-#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48G
 #SBATCH --time=24:00:00
@@ -32,12 +30,20 @@ python scripts/prepare_outcome_data.py \
   "$LOG_PATH" \
   --out "$OUTCOMES_PATH"
 
-python scripts/plot_results.py \
-  "$OUTCOMES_PATH" \
-  --out "$PLOTS_DIR"
+if [ "${BAILIFF_SKIP_PLOTS:-0}" = "1" ]; then
+  echo "Skipping plots (BAILIFF_SKIP_PLOTS=1)."
+else
+  python scripts/plot_results.py \
+    "$OUTCOMES_PATH" \
+    --out "$PLOTS_DIR"
+fi
 
 echo "Batch run complete."
 echo "Logs: $LOG_PATH"
 echo "Manifest: $MANIFEST_PATH"
 echo "Outcomes CSV: $OUTCOMES_PATH"
-echo "Plots: $PLOTS_DIR"
+if [ "${BAILIFF_SKIP_PLOTS:-0}" = "1" ]; then
+  echo "Plots: skipped"
+else
+  echo "Plots: $PLOTS_DIR"
+fi

@@ -1,0 +1,73 @@
+# Nibi CPU + Groq paper batch configuration.
+# Intended for CPU partitions where local GPU inference is unavailable.
+
+cases:
+  - template: bailiff/datasets/cases/traffic.yaml
+    cue: name_ethnicity
+    placebos: [name_placebo]
+    judge_blinding: false
+  - template: bailiff/datasets/cases/simple_assault.yaml
+    cue: name_ethnicity
+    placebos: [name_placebo]
+  - template: bailiff/datasets/cases/shoplifting.yaml
+    cue: name_chinese
+    placebos: [name_placebo]
+  - template: bailiff/datasets/cases/dui.yaml
+    cue: name_chinese
+    placebos: [name_placebo]
+  - template: bailiff/datasets/cases/vandalism.yaml
+    cue: name_indian
+    placebos: [name_placebo]
+  - template: bailiff/datasets/cases/petty_theft.yaml
+    cue: name_indian
+    placebos: [name_placebo]
+
+models:
+  - backend: groq
+    model: llama3-8b-8192
+    backend_policy:
+      timeout_seconds: 90
+      max_retries: 5
+      backoff_seconds: 1.5
+      backoff_multiplier: 2.0
+      rate_limit_seconds: 0.0
+
+seeds:
+  [
+    101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
+    111, 112, 113, 114, 115, 116, 117, 118, 119, 120,
+    121, 122, 123, 124, 125, 126, 127, 128, 129, 130
+  ]
+
+agent_budgets:
+  judge:
+    max_bytes: 2000
+    max_tokens: 800
+  prosecution:
+    max_bytes: 2000
+    max_tokens: 800
+  defense:
+    max_bytes: 2000
+    max_tokens: 800
+
+phase_budgets:
+  - phase: opening
+    max_messages: 2
+  - phase: direct
+    max_messages: 2
+  - phase: cross
+    max_messages: 2
+  - phase: redirect
+    max_messages: 1
+  - phase: closing
+    max_messages: 2
+  - phase: verdict
+    max_messages: 1
+  - phase: audit
+    max_messages: 1
+
+concurrency: 24
+max_retries: 3
+backoff_seconds: 2.0
+out_logs: runs/nibi_groq_batch_logs.jsonl
+manifest: runs/nibi_groq_batch_manifest.jsonl

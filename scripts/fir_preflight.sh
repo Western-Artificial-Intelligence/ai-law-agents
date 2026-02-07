@@ -10,7 +10,7 @@ cd "$REPO_ROOT"
 source .venv/bin/activate
 mkdir -p runs/preflight
 
-pytest -q
+python -m pytest -q
 
 python scripts/run_pilot_trial.py \
   --config configs/pilot.yaml \

@@ -1,0 +1,55 @@
+# Nibi CPU + Groq smoke configuration.
+# Fast validation run before launching the full batch.
+
+cases:
+  - template: bailiff/datasets/cases/traffic.yaml
+    cue: name_ethnicity
+    placebos: [name_placebo]
+  - template: bailiff/datasets/cases/simple_assault.yaml
+    cue: name_ethnicity
+    placebos: [name_placebo]
+
+models:
+  - backend: groq
+    model: llama3-8b-8192
+    backend_policy:
+      timeout_seconds: 90
+      max_retries: 5
+      backoff_seconds: 1.5
+      backoff_multiplier: 2.0
+      rate_limit_seconds: 0.0
+
+seeds: [101, 102]
+
+agent_budgets:
+  judge:
+    max_bytes: 1800
+    max_tokens: 700
+  prosecution:
+    max_bytes: 1800
+    max_tokens: 700
+  defense:
+    max_bytes: 1800
+    max_tokens: 700
+
+phase_budgets:
+  - phase: opening
+    max_messages: 2
+  - phase: direct
+    max_messages: 2
+  - phase: cross
+    max_messages: 2
+  - phase: redirect
+    max_messages: 1
+  - phase: closing
+    max_messages: 2
+  - phase: verdict
+    max_messages: 1
+  - phase: audit
+    max_messages: 1
+
+concurrency: 8
+max_retries: 3
+backoff_seconds: 2.0
+out_logs: runs/nibi_groq_smoke_logs.jsonl
+manifest: runs/nibi_groq_smoke_manifest.jsonl

@@ -19,12 +19,15 @@ def verdict_to_bin(v: Any) -> int | None:
 
 def pair_id_for(trial: Dict[str, Any]) -> str:
     case = str(trial.get("case_identifier", "case"))
+    cue_name = str(trial.get("cue_name", "cue"))
+    is_placebo = bool(trial.get("is_placebo", False))
     seed = int(trial.get("seed", 0))
     cond = trial.get("cue_condition")
     # Treatment is assigned seed+1 in TrialPipeline; pair on control seed
     if cond == "treatment":
         seed = seed - 1
-    return f"{case}-{seed}"
+    tag = "placebo" if is_placebo else "primary"
+    return f"{case}-{cue_name}-{tag}-{seed}"
 
 
 def main() -> None:
@@ -44,6 +47,8 @@ def main() -> None:
             "pair_id": pair_id_for(r),
             "cue_condition": r.get("cue_condition"),
             "cue_treatment": 1 if r.get("cue_condition") == "treatment" else 0,
+            "cue_name": r.get("cue_name"),
+            "is_placebo": bool(r.get("is_placebo", False)),
             "verdict_bin": vb,
             "case_identifier": r.get("case_identifier"),
             "seed": int(r.get("seed", 0)),
@@ -72,6 +77,8 @@ def main() -> None:
                 "pair_id",
                 "cue_condition",
                 "cue_treatment",
+                "cue_name",
+                "is_placebo",
                 "verdict_bin",
                 "case_identifier",
                 "seed",
