@@ -1,0 +1,74 @@
+# Nibi local GPU add-on config: reduced-seed run
+# Model: Qwen2.5-72B-Instruct
+
+cases:
+  - template: bailiff/datasets/cases/traffic.yaml
+    cue: name_ethnicity
+    placebos: [name_placebo]
+    judge_blinding: false
+  - template: bailiff/datasets/cases/simple_assault.yaml
+    cue: name_ethnicity
+    placebos: [name_placebo]
+  - template: bailiff/datasets/cases/shoplifting.yaml
+    cue: name_chinese
+    placebos: [name_placebo]
+  - template: bailiff/datasets/cases/dui.yaml
+    cue: name_chinese
+    placebos: [name_placebo]
+  - template: bailiff/datasets/cases/vandalism.yaml
+    cue: name_indian
+    placebos: [name_placebo]
+  - template: bailiff/datasets/cases/petty_theft.yaml
+    cue: name_indian
+    placebos: [name_placebo]
+
+models:
+  - backend: local
+    model: Qwen/Qwen2.5-72B-Instruct
+    params:
+      provider: transformers
+      model_name: Qwen/Qwen2.5-72B-Instruct
+      device: cuda
+      load_in_4bit: true
+      temperature: 0.2
+    backend_policy:
+      timeout_seconds: 2400
+      max_retries: 1
+      backoff_seconds: 2.0
+      backoff_multiplier: 2.0
+      rate_limit_seconds: 0.0
+
+seeds: [101, 102, 103, 104, 105, 106, 107, 108]
+
+agent_budgets:
+  judge:
+    max_bytes: 2000
+    max_tokens: 800
+  prosecution:
+    max_bytes: 2000
+    max_tokens: 800
+  defense:
+    max_bytes: 2000
+    max_tokens: 800
+
+phase_budgets:
+  - phase: opening
+    max_messages: 2
+  - phase: direct
+    max_messages: 2
+  - phase: cross
+    max_messages: 2
+  - phase: redirect
+    max_messages: 1
+  - phase: closing
+    max_messages: 2
+  - phase: verdict
+    max_messages: 1
+  - phase: audit
+    max_messages: 1
+
+concurrency: 1
+max_retries: 2
+backoff_seconds: 2.0
+out_logs: runs/nibi_local_qwen25_72b_reduced_logs.jsonl
+manifest: runs/nibi_local_qwen25_72b_reduced_manifest.jsonl
