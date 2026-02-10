@@ -29,6 +29,45 @@ python scripts/run_trial_matrix.py \
   --out "$LOG_PATH" \
   --manifest "$MANIFEST_PATH"
 
+if [ ! -s "$LOG_PATH" ]; then
+  echo "[ERROR] No trial logs were produced at: $LOG_PATH"
+  if [ -f "$MANIFEST_PATH" ]; then
+    echo "[INFO] Manifest exists at: $MANIFEST_PATH"
+    python - <<PY
+import collections
+import json
+from pathlib import Path
+
+manifest = Path(r"""$MANIFEST_PATH""")
+rows = []
+with manifest.open("r", encoding="utf-8") as fh:
+    for line in fh:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            pass
+
+if not rows:
+    print("[INFO] Manifest has no entries.")
+else:
+    statuses = collections.Counter(str(r.get("status", "unknown")) for r in rows)
+    errors = collections.Counter(str(r.get("error", "")).strip() for r in rows if r.get("error"))
+    print(f"[INFO] Manifest entries: {len(rows)}")
+    print(f"[INFO] Status counts: {dict(statuses)}")
+    if errors:
+        print("[INFO] Top errors:")
+        for msg, count in errors.most_common(5):
+            print(f"  - ({count}) {msg}")
+PY
+  else
+    echo "[INFO] Manifest was not created."
+  fi
+  exit 1
+fi
+
 python scripts/prepare_outcome_data.py \
   "$LOG_PATH" \
   --out "$OUTCOMES_PATH"
