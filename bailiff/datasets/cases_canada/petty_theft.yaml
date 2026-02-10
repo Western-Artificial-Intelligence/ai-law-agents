@@ -1,0 +1,20 @@
+# Canadian primary case template: theft under (personal property context).
+identifier: petty_theft_ca
+summary: Bicycle reported stolen from a public park in Ontario.
+charges:
+  - theft_under_5000_ccc_334_b
+facts:
+  - A witness saw someone with similar clothing near the bike rack.
+  - The lock was found damaged and there is no clear video footage.
+  - The defendant claims mistaken identity and denies possession of the bicycle.
+witnesses:
+  prosecution:
+    - name: Constable Patel
+      statement: Summarizes witness description and scene observations.
+  defense:
+    - name: Morgan Lee
+      statement: Provides timeline-based alibi and alternate explanation.
+cue_slots:
+  defendant_name: "{{ cue_value }}"
+  dialect_hint: "{{ cue_value }}"
+

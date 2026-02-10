@@ -31,6 +31,10 @@ class BackendTimeoutError(RuntimeError):
     """Raised when the backend exceeds the configured timeout."""
 
 
+class NonRetryableBackendError(RuntimeError):
+    """Raised for backend errors that should not be retried."""
+
+
 @dataclass(slots=True)
 class AgentSpec:
     """Minimal specification for instantiating a role agent."""
@@ -69,7 +73,9 @@ class AgentSpec:
                 time.sleep(policy.rate_limit_seconds)
             try:
                 return _call_with_timeout(lambda: self.backend(prompt, **params), policy.timeout_seconds)
-            except Exception:
+            except Exception as exc:
+                if isinstance(exc, NonRetryableBackendError):
+                    raise
                 attempt += 1
                 if attempt > policy.max_retries:
                     raise

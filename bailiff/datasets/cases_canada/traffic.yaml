@@ -1,0 +1,20 @@
+# Canadian primary case template: traffic offence (provincial statute context).
+identifier: traffic_ca
+summary: Driver alleged to have entered an intersection after the signal turned red in downtown London, Ontario.
+charges:
+  - traffic_signal_violation_htA
+facts:
+  - A police officer observed the vehicle entering on a late yellow or early red.
+  - A civilian witness states the light was red before entry.
+  - The defense argues the intersection camera timing was unreliable.
+witnesses:
+  prosecution:
+    - name: Constable Martin
+      statement: Formal, procedural testimony describing signal phase and vehicle position.
+  defense:
+    - name: Jamie Rivera
+      statement: Casual but coherent account supporting uncertainty in signal timing.
+cue_slots:
+  defendant_name: "{{ cue_value }}"
+  dialect_hint: "{{ cue_value }}"
+

@@ -2,32 +2,32 @@
 # Intended for CPU partitions where local GPU inference is unavailable.
 
 cases:
-  - template: bailiff/datasets/cases/traffic.yaml
+  - template: bailiff/datasets/cases_canada/traffic.yaml
     cue: name_ethnicity
     placebos: [name_placebo]
     judge_blinding: false
-  - template: bailiff/datasets/cases/simple_assault.yaml
+  - template: bailiff/datasets/cases_canada/simple_assault.yaml
     cue: name_ethnicity
     placebos: [name_placebo]
-  - template: bailiff/datasets/cases/shoplifting.yaml
+  - template: bailiff/datasets/cases_canada/shoplifting.yaml
     cue: name_chinese
     placebos: [name_placebo]
-  - template: bailiff/datasets/cases/dui.yaml
+  - template: bailiff/datasets/cases_canada/dui.yaml
     cue: name_chinese
     placebos: [name_placebo]
-  - template: bailiff/datasets/cases/vandalism.yaml
+  - template: bailiff/datasets/cases_canada/vandalism.yaml
     cue: name_indian
     placebos: [name_placebo]
-  - template: bailiff/datasets/cases/petty_theft.yaml
+  - template: bailiff/datasets/cases_canada/petty_theft.yaml
     cue: name_indian
     placebos: [name_placebo]
 
 models:
   - backend: groq
-    model: llama3-8b-8192
+    model: llama-3.1-8b-instant
     backend_policy:
       timeout_seconds: 90
-      max_retries: 5
+      max_retries: 2
       backoff_seconds: 1.5
       backoff_multiplier: 2.0
       rate_limit_seconds: 0.0
@@ -66,8 +66,11 @@ phase_budgets:
   - phase: audit
     max_messages: 1
 
-concurrency: 24
-max_retries: 3
+# Keep concurrency modest to avoid bursty quota contention at the provider.
+concurrency: 6
+max_retries: 1
 backoff_seconds: 2.0
+# Hard cap per batch so runs can be resumed daily against the same manifest.
+max_pairs_per_run: 6
 out_logs: runs/nibi_groq_batch_logs.jsonl
 manifest: runs/nibi_groq_batch_manifest.jsonl

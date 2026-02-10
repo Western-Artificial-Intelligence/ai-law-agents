@@ -1,11 +1,12 @@
 """Unit tests covering budgets, blinding, YAML loader, tagging, IO, and metrics."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 
-from bailiff.core.config import AgentBudget, Phase, Role
+from bailiff.core.config import AgentBudget, CueToggle, Phase, Role
 from bailiff.core.events import ObjectionRuling
 from bailiff.core.io import (
     RunManifest,
@@ -100,6 +101,92 @@ def test_event_tagging_sets_objection_fields() -> None:
     assert utterance.interruption is True
 
 
+def test_event_tagging_reads_structured_events() -> None:
+    session, _ = make_session()
+    utterance = make_utterance(
+        '{"events":{"objection_raised":true,"objection_ruling":"overruled","interruption":true,'
+        '"tags":[{"name":"phase_event","value":"direct"}]}}'
+    )
+
+    session._apply_event_tagging(utterance)
+
+    assert utterance.objection_raised is True
+    assert utterance.objection_ruling == ObjectionRuling.OVERRULED
+    assert utterance.interruption is True
+    assert any(tag.name == "phase_event" and tag.value == "direct" for tag in utterance.tags)
+
+
+def test_prompt_includes_recent_transcript_context() -> None:
+    session, log = make_session()
+    session._log = log
+    session._case_text = "Summary: Demo case"
+    log.utterances.append(make_utterance("First statement", role=Role.PROSECUTION, phase=Phase.OPENING))
+    log.utterances.append(make_utterance("Second statement", role=Role.DEFENSE, phase=Phase.OPENING))
+
+    prompt = session._build_prompt(Role.JUDGE, Phase.VERDICT)
+
+    assert "Transcript So Far:" in prompt
+    assert "prosecution/opening: First statement" in prompt
+    assert "defense/opening: Second statement" in prompt
+
+
+def test_byte_budget_applies_per_turn_not_cumulative() -> None:
+    session, _ = make_session()
+    role = Role.PROSECUTION
+    session.config.agent_budgets[role] = AgentBudget(max_bytes=5, max_tokens=None)
+
+    first = session._apply_byte_budget(role, "abcdefgh")
+    second = session._apply_byte_budget(role, "12345678")
+
+    assert first == "abcde"
+    assert second == "12345"
+
+
+def test_case_slot_rendering_separates_name_and_dialect(tmp_path: Path) -> None:
+    case_path = tmp_path / "case.yaml"
+    case_path.write_text(
+        """identifier: demo
+summary: "Defendant {{ defendant_name }}."
+charges: ["charge"]
+facts:
+  - "Speech style: {{ dialect_hint }}"
+witnesses:
+  prosecution: []
+  defense: []
+cue_slots:
+  defendant_name: "Jordan Taylor"
+  dialect_hint: "Standard American English phrasing in testimony"
+""",
+        encoding="utf-8",
+    )
+    session, _ = make_session()
+    session.config.case_template = case_path
+
+    # Name cue should change defendant_name, not dialect.
+    session.config.cue = CueToggle(
+        name="name_ethnicity",
+        control_value="Alex Johnson",
+        treatment_value="DeShawn Jackson",
+        metadata={"type": "name"},
+    )
+    session.config.cue_value = "DeShawn Jackson"
+    name_rendered = session._load_and_render_case()
+    assert "Defendant DeShawn Jackson" in name_rendered
+    assert "Standard American English phrasing in testimony" in name_rendered
+
+    # Dialect cue should change dialect_hint, not defendant_name.
+    session.config.cue = CueToggle(
+        name="dialect",
+        control_value="Standard American English phrasing in testimony",
+        treatment_value="African American English phrasing in testimony",
+        metadata={"type": "dialect"},
+    )
+    session.config.cue_value = "African American English phrasing in testimony"
+    dialect_rendered = session._load_and_render_case()
+    assert "Defendant Jordan Taylor" in dialect_rendered
+    assert "Speech style: African American English phrasing in testimony" in dialect_rendered
+
+
 def test_manifest_append_is_idempotent(tmp_path: Path) -> None:
     manifest = RunManifest(tmp_path / "runs.jsonl")
     entry = RunManifestEntry(
@@ -135,6 +222,22 @@ def test_jsonl_round_trip(tmp_path: Path) -> None:
     records = read_jsonl(path)
     assert len(records) == 1
     assert records[0]["trial_id"] == log.trial_id
+
+
+def test_append_jsonl_is_thread_safe(tmp_path: Path) -> None:
+    path = tmp_path / "threadsafe.jsonl"
+
+    def _append_one(i: int) -> None:
+        _session, log = make_session()
+        log.trial_id = f"trial-{i}"
+        log.utterances.append(make_utterance(f"content-{i}"))
+        append_jsonl([log], path, validate=False)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(_append_one, range(40)))
+
+    records = read_jsonl(path)
+    assert len(records) == 40
 
 
 def test_compute_prompt_hash_is_deterministic() -> None:

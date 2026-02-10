@@ -1,0 +1,20 @@
+# Canadian primary case template: theft under (retail context).
+identifier: shoplifting_ca
+summary: Alleged retail theft at a shopping centre in Ontario.
+charges:
+  - theft_under_5000_ccc_334_b
+facts:
+  - CCTV suggests concealment behavior but camera angle is obstructed.
+  - Store security recovered unpaid merchandise near the exit.
+  - The defendant states they intended to pay at a different checkout line.
+witnesses:
+  prosecution:
+    - name: Store Manager Kim
+      statement: Describes standard loss-prevention protocol and item recovery.
+  defense:
+    - name: Riley Patel
+      statement: Reports confusion in checkout flow and no observed intent to flee.
+cue_slots:
+  defendant_name: "{{ cue_value }}"
+  dialect_hint: "{{ cue_value }}"
+

@@ -1,10 +1,10 @@
-﻿# Example batch configuration for multi-case/model execution.
+# Example batch configuration for multi-case/model execution.
 cases:
-  - template: bailiff/datasets/cases/traffic.yaml
+  - template: bailiff/datasets/cases_canada/traffic.yaml
     cue: name_ethnicity
     placebos: [name_placebo]
     judge_blinding: false
-  - template: bailiff/datasets/cases/simple_assault.yaml
+  - template: bailiff/datasets/cases_canada/simple_assault.yaml
     cue: name_ethnicity
 models:
   - backend: echo

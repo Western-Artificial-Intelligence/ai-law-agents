@@ -41,6 +41,18 @@ def _person_catalog() -> Dict[str, Person]:
         "Rahul": Person(name="Rahul Sharma", metadata={"ethnicity": "Indian", "gender": "Male"}),
         "Jordan": Person(name="Jordan Taylor", metadata={"ethnicity": "White", "gender": "Male"}),
         "Emily": Person(name="Emily Davis", metadata={"ethnicity": "White", "gender": "Female"}),
+        # Bertrand and Mullainathan (2004)-style first-name cues.
+        "GregMiller": Person(name="Greg Miller", metadata={"ethnicity": "White", "gender": "Male"}),
+        "JamalMiller": Person(name="Jamal Miller", metadata={"ethnicity": "Black", "gender": "Male"}),
+        "EmilyMiller": Person(name="Emily Miller", metadata={"ethnicity": "White", "gender": "Female"}),
+        "LakishaMiller": Person(name="Lakisha Miller", metadata={"ethnicity": "Black", "gender": "Female"}),
+        # Census-surname cues (2010 surname probabilities).
+        "JordanMiller": Person(name="Jordan Miller", metadata={"ethnicity": "White", "gender": "Neutral"}),
+        "JordanWashington": Person(name="Jordan Washington", metadata={"ethnicity": "Black", "gender": "Neutral"}),
+        "JordanGarcia": Person(name="Jordan Garcia", metadata={"ethnicity": "Hispanic", "gender": "Neutral"}),
+        "JordanNguyen": Person(name="Jordan Nguyen", metadata={"ethnicity": "Asian", "gender": "Neutral"}),
+        "JordanMurphy": Person(name="Jordan Murphy", metadata={"ethnicity": "White", "gender": "Neutral"}),
+        "TaylorMiller": Person(name="Taylor Miller", metadata={"ethnicity": "White", "gender": "Neutral"}),
     }
 
 
@@ -79,6 +91,62 @@ def cue_catalog() -> Dict[str, CueToggle]:
             treatment_person=aae_person,
             metadata={"type": "dialect", "reference": "Labov"},
         ),
+        # Research-backed cues for expanded audit panels.
+        # Source (first-name framing): Bertrand and Mullainathan (AER, 2004).
+        "bm_black_white_male": CueToggle(
+            name="bm_black_white_male",
+            control_person=people["GregMiller"],
+            treatment_person=people["JamalMiller"],
+            metadata={
+                "type": "name",
+                "source": "bertrand_mullainathan_2004",
+                "note": "black_vs_white_first_name_male",
+            },
+        ),
+        "bm_black_white_female": CueToggle(
+            name="bm_black_white_female",
+            control_person=people["EmilyMiller"],
+            treatment_person=people["LakishaMiller"],
+            metadata={
+                "type": "name",
+                "source": "bertrand_mullainathan_2004",
+                "note": "black_vs_white_first_name_female",
+            },
+        ),
+        # Source (surname probabilities): US Census 2010 Frequently Occurring Surnames.
+        "census_surname_black_white": CueToggle(
+            name="census_surname_black_white",
+            control_person=people["JordanMiller"],
+            treatment_person=people["JordanWashington"],
+            metadata={
+                "type": "surname",
+                "source": "us_census_2010_surnames",
+                "control_whi": "0.764",
+                "treatment_bla": "0.932",
+            },
+        ),
+        "census_surname_hispanic_white": CueToggle(
+            name="census_surname_hispanic_white",
+            control_person=people["JordanMiller"],
+            treatment_person=people["JordanGarcia"],
+            metadata={
+                "type": "surname",
+                "source": "us_census_2010_surnames",
+                "control_whi": "0.764",
+                "treatment_his": "0.779",
+            },
+        ),
+        "census_surname_asian_white": CueToggle(
+            name="census_surname_asian_white",
+            control_person=people["JordanMiller"],
+            treatment_person=people["JordanNguyen"],
+            metadata={
+                "type": "surname",
+                "source": "us_census_2010_surnames",
+                "control_whi": "0.764",
+                "treatment_asi": "0.889",
+            },
+        ),
     }
 
 
@@ -91,6 +159,18 @@ def placebo_catalog() -> Iterable[CueToggle]:
         control_person=people["Alex"],
         treatment_person=people["Jordan"],
         metadata={"type": "name", "class": "neutral"},
+    )
+    yield CueToggle(
+        name="placebo_firstname_white",
+        control_person=people["JordanMiller"],
+        treatment_person=people["TaylorMiller"],
+        metadata={"type": "name", "class": "within_group_white"},
+    )
+    yield CueToggle(
+        name="placebo_surname_white",
+        control_person=people["JordanMiller"],
+        treatment_person=people["JordanMurphy"],
+        metadata={"type": "surname", "class": "within_group_white"},
     )
 
 

@@ -30,12 +30,20 @@ python -m pip install -e ".[analysis,agent]"
 if [ "${INSTALL_LOCAL_BACKEND:-1}" = "1" ]; then
   TORCH_INDEX_URL="${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu121}"
   python -m pip install torch torchvision torchaudio --index-url "$TORCH_INDEX_URL"
-  python -m pip install transformers accelerate bitsandbytes
+  python -m pip install transformers accelerate bitsandbytes "huggingface_hub[cli]"
 fi
 
 python - <<'PY'
 import bailiff
 print("bailiff import OK:", bailiff.__file__)
 PY
+
+if [ "${INSTALL_LOCAL_BACKEND:-1}" = "1" ]; then
+  if command -v hf >/dev/null 2>&1; then
+    echo "Hugging Face CLI detected. Run: hf auth login"
+  else
+    echo "Hugging Face CLI not on PATH. Run: python -m huggingface_hub.commands.huggingface_cli login"
+  fi
+fi
 
 echo "FIR setup complete."

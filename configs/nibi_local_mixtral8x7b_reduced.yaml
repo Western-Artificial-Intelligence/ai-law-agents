@@ -2,23 +2,23 @@
 # Model: Mixtral-8x7B-Instruct-v0.1 (MoE)
 
 cases:
-  - template: bailiff/datasets/cases/traffic.yaml
+  - template: bailiff/datasets/cases_canada/traffic.yaml
     cue: name_ethnicity
     placebos: [name_placebo]
     judge_blinding: false
-  - template: bailiff/datasets/cases/simple_assault.yaml
+  - template: bailiff/datasets/cases_canada/simple_assault.yaml
     cue: name_ethnicity
     placebos: [name_placebo]
-  - template: bailiff/datasets/cases/shoplifting.yaml
+  - template: bailiff/datasets/cases_canada/shoplifting.yaml
     cue: name_chinese
     placebos: [name_placebo]
-  - template: bailiff/datasets/cases/dui.yaml
+  - template: bailiff/datasets/cases_canada/dui.yaml
     cue: name_chinese
     placebos: [name_placebo]
-  - template: bailiff/datasets/cases/vandalism.yaml
+  - template: bailiff/datasets/cases_canada/vandalism.yaml
     cue: name_indian
     placebos: [name_placebo]
-  - template: bailiff/datasets/cases/petty_theft.yaml
+  - template: bailiff/datasets/cases_canada/petty_theft.yaml
     cue: name_indian
     placebos: [name_placebo]
 

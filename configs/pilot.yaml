@@ -1,5 +1,5 @@
 # Placeholder pilot configuration for the B.A.I.L.I.F.F. harness.
-case_template: bailiff/datasets/cases/traffic.yaml
+case_template: bailiff/datasets/cases_canada/traffic.yaml
 model_identifier: llama-3.1-8b-instant
 seed: 42
 cue: name_ethnicity

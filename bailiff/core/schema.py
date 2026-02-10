@@ -25,5 +25,4 @@ def _trial_log_validator() -> Draft202012Validator:
 
 def validate_trial_log(record: Dict[str, Any]) -> None:
     """Validate a TrialLog dictionary against the JSON Schema."""
-    print(record)
     _trial_log_validator().validate(record)

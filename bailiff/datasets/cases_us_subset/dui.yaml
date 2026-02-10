@@ -1,0 +1,20 @@
+# US robustness subset case: DUI framing under state law.
+identifier: dui_us
+summary: Nighttime traffic stop with alleged alcohol impairment in Michigan.
+charges:
+  - operating_while_intoxicated_state_statute
+facts:
+  - Officer cites odor of alcohol, lane deviation, and inconsistent responses.
+  - Field sobriety indicators are mixed rather than uniformly failed.
+  - Defense challenges breath test maintenance records and administration timing.
+witnesses:
+  prosecution:
+    - name: Officer Chen
+      statement: Describes stop observations and evidentiary sequence.
+  defense:
+    - name: Alex Rivera
+      statement: Notes fatigue and medical factors that can mimic impairment cues.
+cue_slots:
+  defendant_name: "{{ cue_value }}"
+  dialect_hint: "{{ cue_value }}"
+

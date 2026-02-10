@@ -1,44 +1,35 @@
-# Nibi local GPU add-on config: reduced-seed run
-# Model: Qwen3-30B-A3B-Instruct-2507
+# Nibi US robustness subset config
+# Model: Qwen2.5-72B-Instruct
 
 cases:
-  - template: bailiff/datasets/cases_canada/traffic.yaml
+  - template: bailiff/datasets/cases_us_subset/traffic.yaml
     cue: name_ethnicity
     placebos: [name_placebo]
     judge_blinding: false
-  - template: bailiff/datasets/cases_canada/simple_assault.yaml
+  - template: bailiff/datasets/cases_us_subset/simple_assault.yaml
     cue: name_ethnicity
     placebos: [name_placebo]
-  - template: bailiff/datasets/cases_canada/shoplifting.yaml
+  - template: bailiff/datasets/cases_us_subset/dui.yaml
     cue: name_chinese
-    placebos: [name_placebo]
-  - template: bailiff/datasets/cases_canada/dui.yaml
-    cue: name_chinese
-    placebos: [name_placebo]
-  - template: bailiff/datasets/cases_canada/vandalism.yaml
-    cue: name_indian
-    placebos: [name_placebo]
-  - template: bailiff/datasets/cases_canada/petty_theft.yaml
-    cue: name_indian
     placebos: [name_placebo]
 
 models:
   - backend: local
-    model: Qwen/Qwen3-30B-A3B-Instruct-2507
+    model: Qwen/Qwen2.5-72B-Instruct
     params:
       provider: transformers
-      model_name: Qwen/Qwen3-30B-A3B-Instruct-2507
+      model_name: Qwen/Qwen2.5-72B-Instruct
       device: cuda
       load_in_4bit: true
       temperature: 0.2
     backend_policy:
-      timeout_seconds: 1800
+      timeout_seconds: 2400
       max_retries: 2
       backoff_seconds: 2.0
       backoff_multiplier: 2.0
       rate_limit_seconds: 0.0
 
-seeds: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110]
+seeds: [201, 202, 203, 204, 205, 206]
 
 agent_budgets:
   judge:
@@ -70,5 +61,6 @@ phase_budgets:
 concurrency: 1
 max_retries: 2
 backoff_seconds: 2.0
-out_logs: runs/nibi_local_qwen3_30b_a3b_reduced_logs.jsonl
-manifest: runs/nibi_local_qwen3_30b_a3b_reduced_manifest.jsonl
+out_logs: runs/nibi_local_qwen25_72b_us_subset_logs.jsonl
+manifest: runs/nibi_local_qwen25_72b_us_subset_manifest.jsonl
+

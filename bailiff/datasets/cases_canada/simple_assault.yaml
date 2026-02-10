@@ -1,0 +1,20 @@
+# Canadian primary case template: assault (Criminal Code context).
+identifier: simple_assault_ca
+summary: Physical altercation outside a licensed establishment resulting in minor injuries.
+charges:
+  - assault_ccc_266
+facts:
+  - Two patrons argued and a shove led to a fall.
+  - Security footage is partially obstructed and lacks clear first-contact view.
+  - The defendant claims self-defence in response to an initial push.
+witnesses:
+  prosecution:
+    - name: Staff Sergeant Lee
+      statement: Structured account based on statements collected at scene.
+  defense:
+    - name: Taylor Morgan
+      statement: Notes prior provocation and inconsistency in witness timelines.
+cue_slots:
+  defendant_name: "{{ cue_value }}"
+  dialect_hint: "{{ cue_value }}"
+

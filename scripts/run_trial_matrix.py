@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 
 import yaml
 
-from bailiff.agents.base import AgentSpec, RetryPolicy
+from bailiff.agents.base import AgentSpec, NonRetryableBackendError, RetryPolicy
 from bailiff.agents.groq_pool import GroqKeyPool
 from bailiff.agents.prompts import prompt_for
 from bailiff.core.config import AgentBudget, CueToggle, Phase, PhaseBudget, Role, TrialConfig
@@ -144,6 +144,60 @@ class GroqPoolLogger:
         _log_groq_pool(pool, "progress", completed_pairs=total)
 
 
+class RunLimiter:
+    """Thread-safe limiter for stopping long runs early (quota/cap aware)."""
+
+    def __init__(self, max_pairs: int = 0) -> None:
+        self._max_pairs = max(0, int(max_pairs))
+        self._completed = 0
+        self._inflight = 0
+        self._stop_reason: Optional[str] = None
+        self._lock = threading.Lock()
+
+    def should_stop(self) -> bool:
+        with self._lock:
+            if self._stop_reason is not None:
+                return True
+            if self._max_pairs > 0 and self._completed >= self._max_pairs:
+                self._stop_reason = f"Reached max_pairs_per_run={self._max_pairs}"
+                return True
+            return False
+
+    def try_start_assignment(self) -> bool:
+        """Reserve capacity for one assignment if possible."""
+
+        with self._lock:
+            if self._stop_reason is not None:
+                return False
+            if self._max_pairs > 0 and (self._completed + self._inflight) >= self._max_pairs:
+                if self._completed >= self._max_pairs and self._stop_reason is None:
+                    self._stop_reason = f"Reached max_pairs_per_run={self._max_pairs}"
+                return False
+            self._inflight += 1
+            return True
+
+    def stop(self, reason: str) -> None:
+        with self._lock:
+            if self._stop_reason is None:
+                self._stop_reason = reason
+
+    def finish_assignment(self, *, success: bool) -> int:
+        """Release one reserved assignment and optionally count it as completed."""
+
+        with self._lock:
+            if self._inflight > 0:
+                self._inflight -= 1
+            if success:
+                self._completed += 1
+            if self._max_pairs > 0 and self._completed >= self._max_pairs and self._stop_reason is None:
+                self._stop_reason = f"Reached max_pairs_per_run={self._max_pairs}"
+            return self._completed
+
+    @property
+    def stop_reason(self) -> Optional[str]:
+        with self._lock:
+            return self._stop_reason
+
 @dataclass
 class ModelSpec:
     backend: str
@@ -257,22 +311,28 @@ def build_case_specs(cfg: dict) -> List[CaseSpec]:
     default_cue_key = cfg.get("cue", "name_ethnicity")
     default_placebos = cfg.get("placebos", [])
     for entry in cfg.get("cases", []):
-        cue_key = entry.get("cue", default_cue_key)
-        cue = catalog.get(cue_key)
-        if cue is None:
-            raise KeyError(f"Unknown cue key: {cue_key}")
+        cue_keys = entry.get("cues")
+        if cue_keys is None:
+            cue_keys = [entry.get("cue", default_cue_key)]
+        if not isinstance(cue_keys, list) or not cue_keys:
+            raise ValueError("Each case entry must provide 'cue' or a non-empty 'cues' list.")
+        deduped_cue_keys = list(dict.fromkeys(str(cue_key) for cue_key in cue_keys))
         template = Path(entry["template"]).resolve()
         placebo_keys = entry.get("placebos", default_placebos)
         placebo_toggles = resolve_placebos(placebo_keys)
-        cases.append(
-            CaseSpec(
-                template=template,
-                cue=cue,
-                placebo_toggles=placebo_toggles,
-                judge_blinding=bool(entry.get("judge_blinding", cfg.get("judge_blinding", False))),
-                notes=entry.get("notes"),
+        for cue_key in deduped_cue_keys:
+            cue = catalog.get(cue_key)
+            if cue is None:
+                raise KeyError(f"Unknown cue key: {cue_key}")
+            cases.append(
+                CaseSpec(
+                    template=template,
+                    cue=cue,
+                    placebo_toggles=placebo_toggles,
+                    judge_blinding=bool(entry.get("judge_blinding", cfg.get("judge_blinding", False))),
+                    notes=entry.get("notes"),
+                )
             )
-        )
     if not cases:
         raise ValueError("Provide at least one case entry under 'cases'.")
     return cases
@@ -381,6 +441,7 @@ def execute_job(
     manifest: RunManifest,
     max_retries: int,
     backoff_seconds: float,
+    run_limiter: RunLimiter,
     groq_pool: Optional[GroqKeyPool],
     groq_logger: Optional[GroqPoolLogger],
 ) -> int:
@@ -417,49 +478,56 @@ def execute_job(
     case_blob = case_text_for_hash(job.case.template)
     completed = 0
     for assignment in assignments:
+        if run_limiter.should_stop():
+            break
         cue_name = assignment.cue_name or job.case.cue.name
         run_id = compute_run_id(case_identifier, job.model.model_identifier, cue_name, assignment.seed, job.model.backend)
         if manifest.has_run(run_id):
             continue
+        if not run_limiter.try_start_assignment():
+            break
+        assignment_succeeded = False
         attempt = 0
-        while True:
-            try:
-                plan_iter = pipeline.assign_pairs(base_config, [assignment])
-                plan = next(plan_iter)
-                logs = pipeline.run_pair(plan)
-                control_hash = _prompt_hash_for_log(logs[0])
-                treatment_hash = _prompt_hash_for_log(logs[1])
-                pair_hash = compute_prompt_hash(control_hash, treatment_hash, case_blob)
-                append_jsonl(logs, out_path)
-                manifest.append(
-                    RunManifestEntry(
-                        run_id=run_id,
-                        case_identifier=case_identifier,
-                        model_identifier=job.model.model_identifier,
-                        backend=job.model.backend,
-                        cue_name=cue_name,
-                        cue_control=assignment.control_value,
-                        cue_treatment=assignment.treatment_value,
-                        control_seed=assignment.seed,
-                        treatment_seed=assignment.seed + 1,
-                        block_key=assignment.block_key,
-                        is_placebo=assignment.is_placebo,
-                        prompt_hash=pair_hash,
-                        prompt_hash_control=control_hash,
-                        prompt_hash_treatment=treatment_hash,
-                        params=job.model.params,
-                        trial_ids=tuple(log.trial_id for log in logs),
-                        log_path=str(out_path),
-                        retries=attempt,
+        try:
+            while True:
+                if run_limiter.should_stop():
+                    break
+                try:
+                    plan_iter = pipeline.assign_pairs(base_config, [assignment])
+                    plan = next(plan_iter)
+                    logs = pipeline.run_pair(plan)
+                    control_hash = _prompt_hash_for_log(logs[0])
+                    treatment_hash = _prompt_hash_for_log(logs[1])
+                    pair_hash = compute_prompt_hash(control_hash, treatment_hash, case_blob)
+                    append_jsonl(logs, out_path)
+                    manifest.append(
+                        RunManifestEntry(
+                            run_id=run_id,
+                            case_identifier=case_identifier,
+                            model_identifier=job.model.model_identifier,
+                            backend=job.model.backend,
+                            cue_name=cue_name,
+                            cue_control=assignment.control_value,
+                            cue_treatment=assignment.treatment_value,
+                            control_seed=assignment.seed,
+                            treatment_seed=assignment.seed + 1,
+                            block_key=assignment.block_key,
+                            is_placebo=assignment.is_placebo,
+                            prompt_hash=pair_hash,
+                            prompt_hash_control=control_hash,
+                            prompt_hash_treatment=treatment_hash,
+                            params=job.model.params,
+                            trial_ids=tuple(log.trial_id for log in logs),
+                            log_path=str(out_path),
+                            retries=attempt,
+                        )
                     )
-                )
-                completed += 1
-                if job.model.backend == "groq" and groq_logger and groq_pool:
-                    groq_logger.record_completed(1, groq_pool)
-                break
-            except Exception:
-                attempt += 1
-                if attempt > max_retries:
+                    assignment_succeeded = True
+                    completed += 1
+                    if job.model.backend == "groq" and groq_logger and groq_pool:
+                        groq_logger.record_completed(1, groq_pool)
+                    break
+                except NonRetryableBackendError as exc:
                     manifest.append(
                         RunManifestEntry(
                             run_id=run_id,
@@ -480,11 +548,43 @@ def execute_job(
                             trial_ids=(),
                             log_path=str(out_path),
                             status="failed",
+                            error=str(exc),
                             retries=attempt,
                         )
                     )
+                    run_limiter.stop(f"Non-retryable backend error: {exc}")
                     break
-                time.sleep(backoff_seconds * attempt)
+                except Exception as exc:
+                    attempt += 1
+                    if attempt > max_retries:
+                        manifest.append(
+                            RunManifestEntry(
+                                run_id=run_id,
+                                case_identifier=case_identifier,
+                                model_identifier=job.model.model_identifier,
+                                backend=job.model.backend,
+                                cue_name=cue_name,
+                                cue_control=assignment.control_value,
+                                cue_treatment=assignment.treatment_value,
+                                control_seed=assignment.seed,
+                                treatment_seed=assignment.seed + 1,
+                                block_key=assignment.block_key,
+                                is_placebo=assignment.is_placebo,
+                                prompt_hash="failed",
+                                prompt_hash_control=None,
+                                prompt_hash_treatment=None,
+                                params=job.model.params,
+                                trial_ids=(),
+                                log_path=str(out_path),
+                                status="failed",
+                                error=f"max retries exceeded: {exc}",
+                                retries=attempt,
+                            )
+                        )
+                        break
+                    time.sleep(backoff_seconds * attempt)
+        finally:
+            run_limiter.finish_assignment(success=assignment_succeeded)
     return completed
 
 
@@ -501,6 +601,8 @@ def main() -> None:
     concurrency = int(cfg.get("concurrency", 1))
     max_retries = int(cfg.get("max_retries", 2))
     backoff_seconds = float(cfg.get("backoff_seconds", 2.0))
+    max_pairs_per_run = int(cfg.get("max_pairs_per_run", 0))
+    run_limiter = RunLimiter(max_pairs=max_pairs_per_run)
 
     groq_pool = None
     groq_logger = None
@@ -530,6 +632,7 @@ def main() -> None:
                 manifest,
                 max_retries,
                 backoff_seconds,
+                run_limiter,
                 groq_pool,
                 groq_logger,
             ): job
@@ -543,10 +646,15 @@ def main() -> None:
                 raise SystemExit(str(exc)) from exc
             except Exception as exc:
                 print(f"[WARN] Job failed for {job.case.template.name} ({job.model.model_identifier}): {exc}")
+            if run_limiter.should_stop():
+                continue
 
     if groq_logger and groq_pool:
         groq_logger.stop_timer()
         groq_logger.log_end(groq_pool)
+
+    if run_limiter.stop_reason:
+        print(f"[INFO] Batch stopped early: {run_limiter.stop_reason}")
 
     print(f"Completed {completed} paired assignments; manifest now has {len(manifest)} entries.")
 

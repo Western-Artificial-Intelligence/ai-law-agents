@@ -1,0 +1,20 @@
+# Canadian primary case template: mischief under (property damage context).
+identifier: vandalism_ca
+summary: Graffiti applied to a public transit shelter overnight.
+charges:
+  - mischief_under_5000_ccc_430_4
+facts:
+  - CCTV captures a hooded figure near the shelter but face visibility is limited.
+  - Paint residue was found on the defendant's hands later that evening.
+  - The defendant claims involvement in a permitted mural event earlier in the day.
+witnesses:
+  prosecution:
+    - name: Constable Diaz
+      statement: References timeline, location, and recovered paint evidence.
+  defense:
+    - name: Casey Nguyen
+      statement: States the paint was from sanctioned community art activity.
+cue_slots:
+  defendant_name: "{{ cue_value }}"
+  dialect_hint: "{{ cue_value }}"
+

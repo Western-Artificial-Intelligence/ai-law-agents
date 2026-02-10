@@ -6,13 +6,13 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Dict, Iterable, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, Optional, Tuple
 
 import re
 import yaml
 
 from .config import DEFAULT_PHASE_ORDER, Phase, PolicyViolation, Role, TrialConfig
-from .events import TrialLog, UtteranceLog
+from .events import EventTag, TrialLog, UtteranceLog
 from .logging import mark_completed
 from .tokenizer import Tokenizer
 from .token_budget import TokenBudgetEnforcer
@@ -34,6 +34,8 @@ class TrialSession:
     _case_text: Optional[str] = field(default=None, init=False, repr=False)
     _tokenizer: Optional[Tokenizer] = field(default=None, init=False, repr=False)
     _policy_violations: Dict[str, int] = field(default_factory=dict, init=False, repr=False)
+    _history_window: int = field(default=10, init=False, repr=False)
+    _history_char_cap: int = field(default=320, init=False, repr=False)
 
     def run(self) -> TrialLog:
         """Execute the state machine and return the populated trial log."""
@@ -126,6 +128,7 @@ class TrialSession:
 
         cue_line = ""
         case_text = self._case_text or str(self.config.case_template)
+        history_text = self._render_history_context()
         
         # NEW: Enhanced judge blinding enforcement
         # Prevents demographic cue exposure to judges when blinding is enabled
@@ -136,15 +139,8 @@ class TrialSession:
             # NEW: Strict blinding mode - completely strip ALL cue-related content
             # This redacts both control AND treatment values, not just the active one
             if self.config.strict_blinding:
-                # Remove all instances of cue values (control and treatment)
-                cv = self.config.cue_value or ""
-                if cv:  # cue value exists
-                    case_text = case_text.replace(cv, "[REDACTED]")
-                # Also redact the opposite condition value to prevent any leakage
-                if self.config.cue.control_value and self.config.cue.control_value != cv:
-                    case_text = case_text.replace(self.config.cue.control_value, "[REDACTED]")
-                if self.config.cue.treatment_value and self.config.cue.treatment_value != cv:
-                    case_text = case_text.replace(self.config.cue.treatment_value, "[REDACTED]")
+                case_text = self._redact_cues(case_text)
+                history_text = self._redact_cues(history_text)
                 # NEW: Verify no cue leakage - record violation if any cue text remains
                 if self._detect_cue_in_text(case_text, role):
                     self._record_violation(PolicyViolation.JUDGE_CUE_EXPOSURE)
@@ -152,7 +148,8 @@ class TrialSession:
                 # Standard blinding: redact only active cue value
                 cv = self.config.cue_value or ""
                 if cv:
-                    case_text = case_text.replace(cv, "[REDACTED]")
+                    case_text = self._redact_text(case_text, cv)
+                    history_text = self._redact_text(history_text, cv)
         
         # includes cue in prompt if role is not judge, or role is judge but judge is not blinded
         else:
@@ -161,7 +158,8 @@ class TrialSession:
         return (
             f"Case:\n{case_text}{cue_line}\n"
             f"Phase: {phase.value}\n"
-            f"Role: {role.value}"
+            f"Role: {role.value}\n"
+            f"Transcript So Far:\n{history_text}"
         )
 
     def _build_record(self, role: Role, phase: Phase, content: str, token_count: int) -> UtteranceLog:
@@ -188,14 +186,12 @@ class TrialSession:
 
     def _apply_byte_budget(self, role: Role, content: str) -> str:
         budget = self.config.budget_for(role)
-        current = self._bytes_used.get(role, 0)
-        remaining = max(0, budget.max_bytes - current)
         encoded = content.encode("utf-8")
-        if len(encoded) > remaining:
-            clipped = encoded[:remaining]
+        if len(encoded) > budget.max_bytes:
+            clipped = encoded[: budget.max_bytes]
             content = clipped.decode("utf-8", errors="ignore")
         used = len(content.encode("utf-8"))
-        self._bytes_used[role] = current + used
+        self._bytes_used[role] = self._bytes_used.get(role, 0) + used
         return content
 
     def _apply_token_budget(self, role: Role, content: str) -> Tuple[str, int]:
@@ -222,14 +218,9 @@ class TrialSession:
         if max_tokens is None:
             self._tokens_used[role] = used + tokens
             return content, tokens
-            
-        remaining = max(0, max_tokens - used)
-        if remaining == 0:
-            self._tokens_used[role] = used
-            return "", 0
-            
-        if tokens > remaining:
-            clipped, actual_tokens = self._tokenizer.clip(content, remaining)
+
+        if tokens > max_tokens:
+            clipped, actual_tokens = self._tokenizer.clip(content, max_tokens)
             self._tokens_used[role] = used + actual_tokens
             return clipped, actual_tokens
             
@@ -243,9 +234,10 @@ class TrialSession:
         except Exception:
             return str(path)
         cue_val = self.config.cue_value or ""
-        summary = str(data.get("summary", "")).replace("{{ cue_value }}", cue_val)
+        slot_values = self._resolve_slot_values(data or {}, cue_val)
+        summary = self._render_slots(data.get("summary", ""), slot_values)
         facts = data.get("facts", []) or []
-        facts_text = "\n".join(f"- {str(f).replace('{{ cue_value }}', cue_val)}" for f in facts)
+        facts_text = "\n".join(f"- {self._render_slots(f, slot_values)}" for f in facts)
         charges = data.get("charges", []) or []
         charges_text = ", ".join(map(str, charges))
         # witnesses optional
@@ -254,7 +246,7 @@ class TrialSession:
         for side in ("prosecution", "defense"):
             for w in wit.get(side, []) or []:
                 name = str(w.get("name", "Witness"))
-                stmt = str(w.get("statement", "")).replace("{{ cue_value }}", cue_val)
+                stmt = self._render_slots(w.get("statement", ""), slot_values)
                 prose.append(f"{side.title()} witness {name}: {stmt}")
         witnesses_text = "\n".join(prose)
         return (
@@ -264,24 +256,77 @@ class TrialSession:
             f"Witnesses:\n{witnesses_text}"
         )
 
-    _OBJECTION_RE = re.compile(r"\b(objection)\b", re.IGNORECASE)
-    _SUSTAIN_RE = re.compile(r"\b(sustain|sustained)\b", re.IGNORECASE)
-    _OVERRULE_RE = re.compile(r"\b(overrule|overruled)\b", re.IGNORECASE)
-    _INTERRUPT_RE = re.compile(r"\b(interrupt|interruption)\b", re.IGNORECASE)
+    _OBJECTION_RE = re.compile(r"\b(objection|i object|object to)\b", re.IGNORECASE)
+    _SUSTAIN_RE = re.compile(
+        r"\b(sustain|sustained|objection granted|grant(?:ed)? (?:the )?objection)\b",
+        re.IGNORECASE,
+    )
+    _OVERRULE_RE = re.compile(
+        r"\b(overrule|overruled|objection denied|deny(?:ing|ied)? (?:the )?objection)\b",
+        re.IGNORECASE,
+    )
+    _INTERRUPT_RE = re.compile(
+        r"\b(interrupt|interruption|interject|cut(?:ting)? off|speak(?:ing)? over|talk(?:ing)? over)\b",
+        re.IGNORECASE,
+    )
     _JSON_OBJECT_RE = re.compile(r"(\{.*?\})", re.DOTALL)
+    _PLACEHOLDER_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}")
 
     def _apply_event_tagging(self, record: UtteranceLog) -> None:
-        text = record.content
-        if self._OBJECTION_RE.search(text):
-            record.objection_raised = True
-            if self._SUSTAIN_RE.search(text):
+        text = record.content or ""
+
+        # Structured event payloads take precedence when present.
+        structured = self._extract_structured_events(text)
+        if structured:
+            if structured.get("objection_raised"):
+                record.objection_raised = True
+                self._add_tag(record, "objection_raised")
+            ruling = structured.get("objection_ruling")
+            if ruling == "sustained":
                 from .events import ObjectionRuling
+
                 record.objection_ruling = ObjectionRuling.SUSTAINED
-            elif self._OVERRULE_RE.search(text):
+                record.objection_raised = True
+                self._add_tag(record, "objection_ruling", "sustained")
+            elif ruling == "overruled":
                 from .events import ObjectionRuling
+
                 record.objection_ruling = ObjectionRuling.OVERRULED
-        if self._INTERRUPT_RE.search(text):
+                record.objection_raised = True
+                self._add_tag(record, "objection_ruling", "overruled")
+            if structured.get("interruption"):
+                record.interruption = True
+                self._add_tag(record, "interruption")
+            for item in structured.get("tags", []):
+                name = str(item.get("name", "")).strip()
+                value = item.get("value")
+                if name:
+                    self._add_tag(record, name, None if value is None else str(value))
+            return
+
+        # Fallback regex tagging for free-form model outputs.
+        has_objection = bool(self._OBJECTION_RE.search(text))
+        has_sustain = bool(self._SUSTAIN_RE.search(text))
+        has_overrule = bool(self._OVERRULE_RE.search(text))
+        has_interrupt = bool(self._INTERRUPT_RE.search(text))
+
+        if has_objection or has_sustain or has_overrule:
+            record.objection_raised = True
+            self._add_tag(record, "objection_raised")
+            if has_sustain:
+                from .events import ObjectionRuling
+
+                record.objection_ruling = ObjectionRuling.SUSTAINED
+                self._add_tag(record, "objection_ruling", "sustained")
+            elif has_overrule:
+                from .events import ObjectionRuling
+
+                record.objection_ruling = ObjectionRuling.OVERRULED
+                self._add_tag(record, "objection_ruling", "overruled")
+
+        if has_interrupt:
             record.interruption = True
+            self._add_tag(record, "interruption")
 
     def _parse_and_set_verdict_sentence(self) -> None:
         assert self._log is not None
@@ -366,6 +411,115 @@ class TrialSession:
         """
 
         return self._policy_violations.copy()
+
+    def _render_history_context(self) -> str:
+        """Render the most recent utterances for conversational continuity."""
+
+        if self._log is None or not self._log.utterances:
+            return "[No prior transcript]"
+        recent = self._log.utterances[-self._history_window :]
+        lines = []
+        for utt in recent:
+            content = (utt.content or "").strip().replace("\n", " ")
+            if len(content) > self._history_char_cap:
+                content = content[: self._history_char_cap - 3].rstrip() + "..."
+            lines.append(f"- {utt.role.value}/{utt.phase.value}: {content}")
+        return "\n".join(lines) if lines else "[No prior transcript]"
+
+    def _redact_text(self, text: str, token: str) -> str:
+        if not token:
+            return text
+        return re.sub(re.escape(token), "[REDACTED]", text, flags=re.IGNORECASE)
+
+    def _redact_cues(self, text: str) -> str:
+        values = {
+            self.config.cue_value or "",
+            self.config.cue.control_value or "",
+            self.config.cue.treatment_value or "",
+        }
+        redacted = text
+        for value in values:
+            if value:
+                redacted = self._redact_text(redacted, value)
+        return redacted
+
+    def _resolve_slot_values(self, data: Dict[str, Any], cue_value: str) -> Dict[str, str]:
+        """Resolve named cue slots with compatibility for legacy cue_value templates."""
+
+        cue_slots = data.get("cue_slots", {}) or {}
+        slot_values: Dict[str, str] = {
+            str(key): str(value).replace("{{ cue_value }}", cue_value)
+            for key, value in cue_slots.items()
+        }
+        default_name = slot_values.get("defendant_name", "Jordan Taylor")
+        default_dialect = slot_values.get("dialect_hint", "Standard American English phrasing in testimony")
+        cue_type = str(self.config.cue.metadata.get("type", "")).lower()
+        cue_name = self.config.cue.name.lower()
+        is_dialect_toggle = cue_type == "dialect" or "dialect" in cue_name
+        if is_dialect_toggle:
+            slot_values["defendant_name"] = default_name
+            slot_values["dialect_hint"] = cue_value or default_dialect
+        else:
+            slot_values["defendant_name"] = cue_value or default_name
+            slot_values["dialect_hint"] = default_dialect
+        slot_values["cue_value"] = cue_value
+        return slot_values
+
+    def _render_slots(self, raw: object, slot_values: Dict[str, str]) -> str:
+        text = str(raw)
+        text = text.replace("{{ cue_value }}", slot_values.get("cue_value", ""))
+
+        def _replace(match: re.Match[str]) -> str:
+            key = match.group(1)
+            return slot_values.get(key, match.group(0))
+
+        return self._PLACEHOLDER_RE.sub(_replace, text)
+
+    def _extract_structured_events(self, text: str) -> Optional[Dict[str, Any]]:
+        """Parse structured event hints from response JSON when available."""
+
+        for blob in self._json_candidates(text):
+            try:
+                data = json.loads(blob)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(data, dict):
+                continue
+            if "events" in data and isinstance(data["events"], dict):
+                data = data["events"]
+            if not isinstance(data, dict):
+                continue
+            has_signal = any(key in data for key in ("interruption", "objection_raised", "objection_ruling", "tags"))
+            if not has_signal:
+                continue
+            result: Dict[str, Any] = {}
+            if "interruption" in data:
+                result["interruption"] = bool(data.get("interruption"))
+            if "objection_raised" in data:
+                result["objection_raised"] = bool(data.get("objection_raised"))
+            if "objection_ruling" in data:
+                ruling = str(data.get("objection_ruling", "")).strip().lower()
+                if ruling in {"sustained", "overruled"}:
+                    result["objection_ruling"] = ruling
+            tags = data.get("tags")
+            if isinstance(tags, list):
+                norm_tags = []
+                for item in tags:
+                    if isinstance(item, dict) and "name" in item:
+                        norm_tags.append(item)
+                    elif isinstance(item, str):
+                        norm_tags.append({"name": item, "value": None})
+                if norm_tags:
+                    result["tags"] = norm_tags
+            return result
+        return None
+
+    @staticmethod
+    def _add_tag(record: UtteranceLog, name: str, value: Optional[str] = None) -> None:
+        for tag in record.tags:
+            if tag.name == name and tag.value == value:
+                return
+        record.tags.append(EventTag(name=name, value=value))
 
     @staticmethod
     def _extract_verdict_fields(text: str) -> Tuple[Optional[str], Optional[str]]:

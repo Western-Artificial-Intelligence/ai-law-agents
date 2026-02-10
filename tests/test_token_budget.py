@@ -33,7 +33,7 @@ def _make_session(max_tokens: int, model_identifier: str = "gpt-4o-mini") -> Tri
     return session
 
 
-def test_apply_role_budgets_truncates_to_remaining_tokens():
+def test_apply_role_budgets_truncates_to_per_turn_tokens():
     session = _make_session(max_tokens=3)
     text = "token0 token1 token2 token3 token4"
 
@@ -45,15 +45,15 @@ def test_apply_role_budgets_truncates_to_remaining_tokens():
     assert "token4" not in clipped
 
 
-def test_apply_role_budgets_returns_empty_when_budget_spent():
+def test_apply_role_budgets_uses_per_turn_cap_even_after_prior_usage():
     session = _make_session(max_tokens=2)
     session._tokens_used[Role.JUDGE] = 2
 
     clipped, token_count = session._apply_role_budgets(Role.JUDGE, "one more message")
 
-    assert clipped == ""
-    assert token_count == 0
-    assert session._tokens_used[Role.JUDGE] == 2
+    assert clipped == "one more"
+    assert token_count == 2
+    assert session._tokens_used[Role.JUDGE] == 4
 
 
 def test_token_budget_tracking_and_summary():

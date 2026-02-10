@@ -15,11 +15,14 @@ mkdir -p runs/slurm
 source .venv/bin/activate
 
 CONFIG_PATH="${BAILIFF_CONFIG:-configs/fir_batch.yaml}"
-RUN_TAG="fir_${SLURM_JOB_ID:-manual}_$(date +%Y%m%d_%H%M%S)"
-LOG_PATH="runs/${RUN_TAG}_logs.jsonl"
-MANIFEST_PATH="runs/${RUN_TAG}_manifest.jsonl"
-OUTCOMES_PATH="runs/${RUN_TAG}_outcomes.csv"
-PLOTS_DIR="runs/${RUN_TAG}_plots"
+DEFAULT_RUN_TAG="fir_${SLURM_JOB_ID:-manual}_$(date +%Y%m%d_%H%M%S)"
+RUN_TAG="${BAILIFF_RUN_TAG:-$DEFAULT_RUN_TAG}"
+LOG_PATH="${BAILIFF_LOG_PATH:-runs/${RUN_TAG}_logs.jsonl}"
+MANIFEST_PATH="${BAILIFF_MANIFEST_PATH:-runs/${RUN_TAG}_manifest.jsonl}"
+OUTCOMES_PATH="${BAILIFF_OUTCOMES_PATH:-runs/${RUN_TAG}_outcomes.csv}"
+PLOTS_DIR="${BAILIFF_PLOTS_DIR:-runs/${RUN_TAG}_plots}"
+
+mkdir -p "$(dirname "$LOG_PATH")" "$(dirname "$MANIFEST_PATH")" "$(dirname "$OUTCOMES_PATH")" "$PLOTS_DIR"
 
 python scripts/run_trial_matrix.py \
   --config "$CONFIG_PATH" \

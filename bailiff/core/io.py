@@ -15,10 +15,22 @@ from .config import Phase, Role
 from .schema import validate_trial_log
 
 _DEFAULT_VALIDATE = os.getenv("BAILIFF_VALIDATE_LOGS", "1").lower() not in {"0", "false", "no"}
+_FILE_LOCK_GUARD = Lock()
+_FILE_LOCKS: Dict[str, Lock] = {}
 
 
 def _should_validate(flag: Optional[bool]) -> bool:
     return _DEFAULT_VALIDATE if flag is None else flag
+
+
+def _lock_for_path(path: Path) -> Lock:
+    key = str(path.resolve())
+    with _FILE_LOCK_GUARD:
+        lock = _FILE_LOCKS.get(key)
+        if lock is None:
+            lock = Lock()
+            _FILE_LOCKS[key] = lock
+        return lock
 
 
 @dataclass
@@ -43,6 +55,7 @@ class RunManifestEntry:
     trial_ids: Sequence[str] = field(default_factory=tuple)
     log_path: Optional[str] = None
     status: str = "completed"
+    error: Optional[str] = None
     retries: int = 0
 
 
@@ -124,14 +137,16 @@ def _convert_datetimes_recursive(obj: object) -> object:
 def write_jsonl(logs: Iterable[TrialLog], path: Path, *, validate: Optional[bool] = None) -> None:
     validate_flag = _should_validate(validate)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        for log in logs:
-            rec = asdict(log)
-            # Recursively convert datetime objects to RFC 3339 strings
-            rec = _convert_datetimes_recursive(rec)
-            if validate_flag:
-                validate_trial_log(rec)
-            f.write(json.dumps(rec, default=_encode, ensure_ascii=False) + "\n")
+    lock = _lock_for_path(path)
+    with lock:
+        with path.open("w", encoding="utf-8") as f:
+            for log in logs:
+                rec = asdict(log)
+                # Recursively convert datetime objects to RFC 3339 strings
+                rec = _convert_datetimes_recursive(rec)
+                if validate_flag:
+                    validate_trial_log(rec)
+                f.write(json.dumps(rec, default=_encode, ensure_ascii=False) + "\n")
 
 
 def append_jsonl(logs: Iterable[TrialLog], path: Path, *, validate: Optional[bool] = None) -> None:
@@ -139,14 +154,16 @@ def append_jsonl(logs: Iterable[TrialLog], path: Path, *, validate: Optional[boo
 
     validate_flag = _should_validate(validate)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as f:
-        for log in logs:
-            rec = asdict(log)
-            # Recursively convert datetime objects to RFC 3339 strings
-            rec = _convert_datetimes_recursive(rec)
-            if validate_flag:
-                validate_trial_log(rec)
-            f.write(json.dumps(rec, default=_encode, ensure_ascii=False) + "\n")
+    lock = _lock_for_path(path)
+    with lock:
+        with path.open("a", encoding="utf-8") as f:
+            for log in logs:
+                rec = asdict(log)
+                # Recursively convert datetime objects to RFC 3339 strings
+                rec = _convert_datetimes_recursive(rec)
+                if validate_flag:
+                    validate_trial_log(rec)
+                f.write(json.dumps(rec, default=_encode, ensure_ascii=False) + "\n")
 
 
 def read_jsonl(path: Path) -> List[dict]:

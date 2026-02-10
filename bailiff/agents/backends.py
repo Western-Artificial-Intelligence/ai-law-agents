@@ -7,6 +7,7 @@ import uuid
 from typing import Dict, List, Optional
 
 from ..core.token_budget import check_run_allowed, register_token_usage
+from .base import NonRetryableBackendError
 from .groq_pool import GroqKeyPool
 
 
@@ -62,7 +63,7 @@ class GroqBackend:
                         )
                         
                         if not allowed:
-                            raise RuntimeError(f"Token budget exceeded: {reason}")
+                            raise NonRetryableBackendError(f"Token budget exceeded: {reason}")
                     
                     client = self._clients.get(lease.key)
                     if client is None:
@@ -95,19 +96,29 @@ class GroqBackend:
                         
                         return resp.choices[0].message.content or ""
                     except Exception as exc:  # pragma: no cover - network
+                        if _is_hard_quota_error(exc):
+                            lease.mark_failure(exc)
+                            raise GroqQuotaExceededError(str(exc)) from exc
                         if _is_rate_limit_error(exc):
                             lease.mark_rate_limited(exc)
                             # The backoff is already set in the key status, so we'll wait
                             # when trying to acquire the next key. Just continue the loop.
                         else:
                             lease.mark_failure(exc)
-                            # For non-rate-limit errors, wait a bit before retry
-                            time.sleep(1.0)
-                        # Continue loop to retry with a different key
-            except RuntimeError:
-                # No keys available - wait and retry
-                time.sleep(1.0)
-                continue
+                            raise
+                        # Continue loop to retry with a different key.
+            except RuntimeError as exc:
+                # Only absorb pool availability waits. Bubble up all other runtime failures.
+                if isinstance(exc, NonRetryableBackendError):
+                    raise
+                if "No Groq API keys are currently available" in str(exc):
+                    time.sleep(1.0)
+                    continue
+                raise
+
+
+class GroqQuotaExceededError(NonRetryableBackendError):
+    """Raised when Groq reports a hard quota exhaustion event (for example TPD)."""
 
 
 class GeminiBackend:
@@ -185,3 +196,16 @@ def _is_rate_limit_error(exc: Exception) -> bool:
         return True
     message = str(exc)
     return "429" in message or "rate limit" in message.lower()
+
+
+def _is_hard_quota_error(exc: Exception) -> bool:
+    """Detect quota-exhausted errors that should stop retries."""
+
+    message = str(exc).lower()
+    if "tokens per day" in message:
+        return True
+    if " tpd" in message or "(tpd)" in message:
+        return True
+    if "quota exceeded" in message:
+        return True
+    return False

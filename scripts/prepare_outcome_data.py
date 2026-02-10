@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -30,6 +31,26 @@ def pair_id_for(trial: Dict[str, Any]) -> str:
     return f"{case}-{cue_name}-{tag}-{seed}"
 
 
+def normalize_pairs(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Return exactly one control+treatment row for each complete pair."""
+
+    by_pair: Dict[str, Dict[str, Dict[str, Any]]] = defaultdict(dict)
+    for row in rows:
+        pair_id = str(row["pair_id"])
+        condition = str(row.get("cue_condition", ""))
+        if condition not in {"control", "treatment"}:
+            continue
+        by_pair[pair_id][condition] = row
+
+    normalized_rows: List[Dict[str, Any]] = []
+    for cond_map in by_pair.values():
+        if set(cond_map.keys()) != {"control", "treatment"}:
+            continue
+        normalized_rows.append(cond_map["control"])
+        normalized_rows.append(cond_map["treatment"])
+    return normalized_rows
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description="Prepare tidy outcome CSV from trial JSONL logs.")
     p.add_argument("logs", type=Path, help="Path to JSONL logs (from run_pilot_trial.py)")
@@ -57,12 +78,9 @@ def main() -> None:
         }
         rows.append(row)
 
-    # Keep only pairs with both control and treatment
-    from collections import Counter
-
-    counts = Counter([row["pair_id"] for row in rows])
-    keep = {pid for pid, c in counts.items() if c >= 2}
-    rows = [row for row in rows if row["pair_id"] in keep]
+    # Keep exactly one control and one treatment per pair.
+    # If retries produced duplicates for a condition, retain the most recent row.
+    rows = normalize_pairs(rows)
 
     # Write CSV
     args.out.parent.mkdir(parents=True, exist_ok=True)
