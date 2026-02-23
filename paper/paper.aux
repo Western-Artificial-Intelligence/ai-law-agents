@@ -1,0 +1,116 @@
+\relax 
+\citation{henderson2023trial,katz2017general}
+\citation{angwin2016machine,dressel2018accuracy,caliskan2017semantics,henderson2023trial}
+\citation{tyler1988social,grgic2018human}
+\citation{yue2025maser,xu2024agentcourt}
+\citation{kleinberg2016inherent,corbett2017algorithmic}
+\citation{shah2020predictive,blodgett2020language}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{1}{}\protected@file@percent }
+\citation{tyler1988social}
+\citation{khan2024adversarial}
+\citation{grgic2018human}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces End-to-end B.A.I.L.I.F.F. architecture: paired assignment generation, guarded trial execution, structured logging, and downstream inference.}}{2}{}\protected@file@percent }
+\newlabel{fig:system_architecture}{{1}{2}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Agent prompt design (components anchored in doctrine)}}{2}{}\protected@file@percent }
+\newlabel{tab:agent_prompts}{{I}{2}{}{}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Research execution pipeline: Slurm submission, resumable paired execution, manifest state updates, and outcome extraction for terminal-first analysis.}}{2}{}\protected@file@percent }
+\newlabel{fig:trial_state_machine}{{2}{2}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {III}System Overview}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Roles, Guards, and State Machine}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Structured Logging}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Execution Setup}{2}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Runtime setup for current Nibi batch runs}}{2}{}\protected@file@percent }
+\newlabel{tab:runtime_setup}{{II}{2}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Experimental Design}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Cases and Models}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Cells and Power}{2}{}\protected@file@percent }
+\newlabel{eq:neff}{{1}{2}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Case Ambiguity Design: Ensuring Non-Deterministic Verdicts}}{3}{}\protected@file@percent }
+\newlabel{tab:case_ambiguity}{{III}{3}{}{}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Schematic of the system-prompt structure. Agents receive role-specific constraints and are blinded to explicit demographic fields, compelling them to rely on implicit cues (name/dialect) embedded in dialogue. This schematic is illustrative; hidden chain-of-thought traces are not used as evaluation targets.}}{3}{}\protected@file@percent }
+\newlabel{fig:prompt_structure}{{3}{3}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Primary models evaluated across distinct architectures.}}{3}{}\protected@file@percent }
+\newlabel{tab:model_selection}{{IV}{3}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}Counterfactual Cue Protocol and Identification}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Potential Outcomes}{3}{}\protected@file@percent }
+\newlabel{eq:tau_logodds}{{2}{3}{}{}{}}
+\newlabel{eq:severity_norm}{{3}{3}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Pairing, Placebos, and Blinding}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Metrics and Estimands}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Outcome Metrics}{3}{}\protected@file@percent }
+\newlabel{sec:outcomes}{{\mbox  {VI-A}}{3}{}{}{}}
+\newlabel{eq:glmm}{{4}{3}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Procedural Metrics (with Measurement Error)}{3}{}\protected@file@percent }
+\newlabel{eq:share}{{5}{3}{}{}{}}
+\newlabel{eq:me_correction}{{6}{3}{}{}{}}
+\newlabel{eq:objection_bias}{{7}{4}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-C}}Counterfactual Flip Rate}{4}{}\protected@file@percent }
+\newlabel{eq:flip}{{8}{4}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Estimators and Inference}{4}{}\protected@file@percent }
+\newlabel{sec:estimators}{{VII}{4}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Paired Estimators (Design-Consistent)}{4}{}\protected@file@percent }
+\newlabel{eq:mcnemar}{{9}{4}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-B}}GLMM Estimation and KR CIs}{4}{}\protected@file@percent }
+\newlabel{sec:inference}{{\mbox  {VII-B}}{4}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}Wild Cluster Bootstrap}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-D}}Randomization Inference (RI)}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-E}}Multiplicity, Equivalence, and Sensitivity}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Implementation Details}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-A}}Prompting and Budgets}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-B}}Reproducibility}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IX}Results: Preliminary Analysis}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-A}}Narrative Summary}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-B}}Outcome Bias}{4}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces Conviction Rates by Condition ($N=100$ pairs)}}{5}{}\protected@file@percent }
+\newlabel{tab:outcome_results}{{V}{5}{}{}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Pilot conviction rates by case and cue condition. The largest treatment-minus-control shifts appear in the higher-ambiguity assault and traffic templates.}}{5}{}\protected@file@percent }
+\newlabel{fig:conviction_rates}{{4}{5}{}{}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IX-B}1}Implications of Benevolent Bias}{5}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-C}}Procedural Bias}{5}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Procedural Disparities (Treatment - Control)}}{5}{}\protected@file@percent }
+\newlabel{tab:procedural_bias}{{VI}{5}{}{}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Pilot counterfactual flip rates by case. Higher bars indicate lower verdict consistency under demographic cue swaps.}}{5}{}\protected@file@percent }
+\newlabel{fig:flip_rates}{{5}{5}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces Family-level conviction snapshot (pooled over completed runs)}}{5}{}\protected@file@percent }
+\newlabel{tab:cross_model_snapshot}{{VII}{5}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-D}}Counterfactual Flips}{5}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-E}}Negative Controls (Placebo)}{5}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-F}}Cross-Model Family Snapshot}{5}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-G}}What We Can Claim at This Stage}{5}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Family-level stability snapshot. Pooled flip rate is non-zero across families, including Llama, Phi, and DeepSeek, indicating that verdict instability persists even when most pooled directional effects are small in Table~\ref {tab:cross_model_snapshot}.}}{6}{}\protected@file@percent }
+\newlabel{fig:family_effect_snapshot}{{6}{6}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {X}Discussion: Practical Implications}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {XI}Ablations and Diagnostics}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {XII}Threats to Validity}{6}{}\protected@file@percent }
+\newlabel{sec:threats}{{XII}{6}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {XIII}Ethical Considerations}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {XIV}Reproducibility and Artifact}{6}{}\protected@file@percent }
+\bibstyle{IEEEtran}
+\bibcite{katz2017general}{1}
+\bibcite{barocas2016big}{2}
+\bibcite{shah2020predictive}{3}
+\bibcite{blodgett2020language}{4}
+\bibcite{angwin2016machine}{5}
+\bibcite{dressel2018accuracy}{6}
+\bibcite{starke2022fairness}{7}
+\bibcite{caliskan2017semantics}{8}
+\bibcite{henderson2023trial}{9}
+\bibcite{yue2025maser}{10}
+\bibcite{xu2024agentcourt}{11}
+\bibcite{tyler1988social}{12}
+\bibcite{grgic2018human}{13}
+\bibcite{khan2024adversarial}{14}
+\bibcite{greenwald1995implicit}{15}
+\bibcite{bertrand2004emily}{16}
+\bibcite{pager2003mark}{17}
+\bibcite{fryer2004causes}{18}
+\bibcite{labov2006social}{19}
+\bibcite{kleinberg2016inherent}{20}
+\bibcite{corbett2017algorithmic}{21}
+\bibcite{gelman2006data}{22}
+\bibcite{rogers2020primer}{23}
+\@writefile{toc}{\contentsline {section}{\numberline {XV}Conclusion}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{Appendix\nobreakspace  A: Artifact \& Orchestration (Operational)}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{7}{}\protected@file@percent }
+\gdef \@abspage@last{7}

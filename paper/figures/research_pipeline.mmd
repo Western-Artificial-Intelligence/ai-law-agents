@@ -1,0 +1,16 @@
+%%{init: {'theme':'base', 'flowchart': {'htmlLabels': true, 'nodeSpacing': 50, 'rankSpacing': 55, 'curve': 'linear'}}}%%
+flowchart LR
+  classDef setup fill:#eef6ff,stroke:#1d4ed8,stroke-width:1px,color:#0f172a
+  classDef run fill:#f0fdf4,stroke:#15803d,stroke-width:1px,color:#0f172a
+  classDef out fill:#fff7ed,stroke:#c2410c,stroke-width:1px,color:#0f172a
+  classDef warn fill:#fff1f2,stroke:#be123c,stroke-width:1px,color:#0f172a
+
+  A["Config tags<br/>(models, cases, cues, seeds)"]:::setup --> B["Manifest expansion<br/>(paired control/treatment assignments)"]:::setup
+  B --> C["Slurm submission<br/>(1x H100 default,<br/>2x H100 recovery profile)"]:::setup
+  C --> D["Worker execution<br/>(fresh context + role guards)"]:::run
+  D --> E{"Assignment status"}:::run
+  E -- "completed" --> G["Logs JSONL + manifest update"]:::out
+  E -- "timeout / OOM / parse miss" --> F["Leave pending in manifest"]:::warn
+  F --> C
+  G --> H["Deterministic outcome parser<br/>(prepare_outcome_data.py)"]:::out
+  H --> I["Terminal-first analysis<br/>(pairs, OR, p-value, flip,<br/>by-case diagnostics)"]:::out

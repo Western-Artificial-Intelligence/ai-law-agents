@@ -31,17 +31,17 @@
 \author{
 \makebox[\textwidth][c]{
 \begin{tabular}{c c c}
-Luke Blommestyn & Noah Kostesku & Gary Yi \\
+Luke Blommesteyn & Nathan Chiu & Gary Yi \\
 \textit{Western University} & \textit{Western University} & \textit{Western University} \\
-\texttt{lblommes@uwo.ca} & \texttt{nkostes@uwo.ca} & \texttt{gyi9@uwo.ca} \\
+\texttt{lblommes@uwo.ca} & \texttt{nchiu25@uwo.ca} & \texttt{gyi9@uwo.ca} \\
 \end{tabular}
 }
 \\[0.8em]
 \makebox[\textwidth][c]{
 \begin{tabular}{c c c}
-Hassan Al-Nasih & Nathan Chiu & Ronit Longia \\
+Hassan Al-Nasih & Ronit Longia & Noah Kostesku \\
 \textit{Western University} & \textit{Western University} & \textit{Western University} \\
-\texttt{halnasih@uwo.ca} & \texttt{nchiu25@uwo.ca} & \texttt{rlongia2@uwo.ca} \\
+\texttt{halnasih@uwo.ca} & \texttt{rlongia2@uwo.ca} & \texttt{nkostes@uwo.ca} \\
 \end{tabular}
 }
 }
@@ -50,7 +50,7 @@ Hassan Al-Nasih & Nathan Chiu & Ronit Longia \\
 \maketitle
 
 \begin{abstract}
-We present \emph{B.A.I.L.I.F.F.}, a framework to measure fairness in AI-driven legal trials. As Large Language Models (LLMs) are increasingly used in legal contexts, it is critical to ensure they do not exhibit bias against protected groups. We simulate adversarial trials with AI agents playing the roles of Judge, Prosecution, and Defense. By keeping the case facts identical but swapping the defendant's demographic cues (e.g., name, dialect), we can isolate and quantify two types of bias: \emph{outcome bias} (verdicts and sentencing) and \emph{procedural bias} (interruptions, tone, and objection rulings). We provide a rigorous statistical toolkit to analyze these disparities, including paired tests and hierarchical models. Preliminary results from 100 trials reveal a complex picture: while the system shows signs of "performative fairness" (lower conviction rates for minority groups), it simultaneously exhibits procedural unfairness (more interruptions and fewer sustained objections for the defense).
+We present \emph{B.A.I.L.I.F.F.}, a framework for auditing fairness in simulated AI-driven legal trials. Our core question is counterfactual: if two defendants face identical facts but differ only in demographic cues (e.g., name, dialect), does an AI courtroom behave differently? To answer this, we run adversarial trials with three independent AI agents (Judge, Prosecution, Defense), each constrained by fixed role prompts and admissible-behavior rules. We estimate both \emph{outcome bias} (verdicts and sentencing) and \emph{procedural bias} (interruptions, tone, and objection rulings) using paired tests, hierarchical models, bootstrap intervals, and randomization inference. Across our full multi-model panel, we observe a consistent structural pattern: top-line outcome rates can look acceptable while procedural dynamics remain unequal, and rerun instability can reverse directional claims within the same model family. Static fairness checks are therefore inadequate for legal AI; interactive adversarial auditing should be treated as a required pre-deployment standard to prevent fairness veneers.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -60,26 +60,30 @@ artificial intelligence; bias detection; legal technology; multi-agent systems; 
 % =========================================================
 \section{Introduction}
 
-Large Language Models (LLMs) are rapidly entering the legal profession, assisting with everything from drafting contracts to predicting case outcomes. However, legal justice is not just about the final verdict; it is about the \emph{process}. A fair trial requires that all parties are heard equally, regardless of their background.
+Consider two defendants in the same case: same facts, same witnesses, same legal standards. The only change is a demographic cue embedded in the narrative. In a fair legal process, neither the verdict nor the quality of representation should change under that swap.
 
-Existing benchmarks often test LLMs on static questions. We argue that to truly understand legal bias, we must study LLMs in \emph{interactive}, adversarial settings where they act as agents. We introduce \emph{B.A.I.L.I.F.F.}, a multi-agent simulation framework that runs mock trials to detect bias.
+Large Language Models (LLMs) are increasingly being evaluated and deployed for legal drafting, legal search, and case-outcome support tasks~\cite{henderson2023trial,katz2017general}. Yet most audits remain static and single-turn. We argue that bias in legal AI must be studied in \emph{interactive}, adversarial proceedings, because unfairness can appear in how the trial is conducted even when final outcomes appear acceptable. \emph{B.A.I.L.I.F.F.} is designed around this process-first view.
+
+This paper follows a simple research arc: (i) construct paired counterfactual trials that isolate cue effects, (ii) run them at scale under reproducible orchestration, and (iii) test whether apparent fairness in outcomes is matched by fairness in procedure. The core empirical result so far is that these two layers can diverge.
+
+The key narrative risk is what we call a \emph{fairness veneer}: a system can look equitable in top-line outcomes while still treating parties unevenly during the trial itself. In legal settings, that distinction is not cosmetic. Procedure is part of justice, not a secondary metric.
 
 \textbf{Research Questions.}
 \begin{enumerate}[label=\textbf{RQ\arabic*}, leftmargin=*]
 \item \textbf{Outcome Bias:} Do LLMs convict defendants more often based on implicit cues (like names) when the facts are identical?
 \item \textbf{Procedural Bias:} Even if the verdict is fair, is the \emph{process} fair? Do agents interrupt the defense more or use harsher tone?
-\item \textbf{Relationship:} Does procedural unfairness predict outcome unfairness?
+\item \textbf{Relationship:} What is the relationship between procedural unfairness and outcome unfairness?
 \end{enumerate}
 
 \textbf{Contributions.}
 \begin{itemize}
     \item \textbf{Simulation Harness:} A reusable system for running AI mock trials with strict procedural rules.
-    \item \textbf{Counterfactual Design:} A method to "toggle" demographics while keeping facts fixed, allowing us to prove causation, not just correlation.
-    \item \textbf{Statistical Rigor:} We provide the math to properly analyze these experiments, correcting for random noise.
-    \item \textbf{Findings:} We present evidence of a "benevolent bias" phenomenon, where models over-correct on verdicts but still show procedural bias.
+    \item \textbf{Counterfactual Design:} A method to "toggle" demographics while keeping facts fixed, enabling direct attribution of observed differences to demographic-cue changes under stated assumptions.
+    \item \textbf{Statistical Rigor:} A full inference stack with paired tests, hierarchical mixed models, wild cluster bootstrap, placebo checks, and randomization inference.
+    \item \textbf{Findings:} In the pilot setting, we observe a "benevolent bias" pattern where outcome direction and procedural fairness can diverge.
 \end{itemize}
 
-\noindent\textbf{Our Fairness Standard.} If two defendants have the exact same case facts, they should receive the same verdict and the same quality of defense. Any deviation is a sign of bias.
+\noindent\textbf{Our Fairness Standard.} If two defendants have the exact same case facts, they should receive the same verdict and the same quality of defense. Any systematic deviation beyond expected stochastic variation (operationalized with two-sided tests at $\alpha=0.05$) is treated as evidence of potential bias.
 
 % =========================================================
 \section{Related Work}
@@ -90,7 +94,14 @@ Evidence of algorithmic and linguistic bias spans legal and adjacent domains~\ci
 \section{System Overview}
 
 \subsection{Roles, Guards, and State Machine}
-Agents (\emph{judge, prosecution, defense}) operate under per-turn \emph{byte} budgets to avoid verbosity confounds. A directed state machine enforces: openings $\to$ examinations $\to$ cross $\to$ closings $\to$ verdict $\to$ reasoning audit. Guardrails prevent role leakage (e.g., judges never receive explicit demographic fields; only naturalistic cues may appear).
+Agents (\emph{judge, prosecution, defense}) operate under cumulative byte budgets across their utterances in each trial, with optional token budgets as an additional constraint, to avoid verbosity confounds. A directed state machine enforces: openings $\to$ examinations $\to$ cross $\to$ closings $\to$ verdict $\to$ reasoning audit. Guardrails (including judge blinding) prevent role leakage: judges never receive explicit demographic fields, and only indirect cues (e.g., name/dialect in case text) remain unless strict blinding is enabled.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.99\linewidth]{plots/system_architecture.png}
+\caption{End-to-end B.A.I.L.I.F.F. architecture: paired assignment generation, guarded trial execution, structured logging, and downstream inference.}
+\label{fig:system_architecture}
+\end{figure}
 
 \begin{table}[!t]
 \caption{Agent prompt design (components anchored in doctrine)}
@@ -110,24 +121,46 @@ Defense & Zealous advocacy; challenge weight/admissibility; preserve record; no 
 \end{tabular}
 \end{table}
 
-% Figures guarded until assets exist
-\iffalse
 \begin{figure}[!t]
 \centering
-\includegraphics[width=0.95\linewidth]{trial_flow_diagram.png}
-\caption{Trial flow with conditional objection handling.}
-\label{fig:trial_flow}
+\includegraphics[width=0.99\linewidth]{plots/trial_state_machine.png}
+\caption{Research execution pipeline: Slurm submission, resumable paired execution, manifest state updates, and outcome extraction for terminal-first analysis.}
+\label{fig:trial_state_machine}
 \end{figure}
-\fi
 
 \subsection{Structured Logging}
 Each utterance logs: role, phase, addressed party, raw bytes/chars/tokens, and event tags: \texttt{objection\_raised}, \texttt{objection\_ruling}\(\in\)\{\texttt{sustained},\texttt{overruled}\}, \texttt{interruption}, plus timestamps and prompt hashes. This enables estimator-ready extraction.
+
+\subsection{Execution Setup}
+Operationally, each run follows a fixed path: define a trial family in YAML, expand to paired assignments, execute under guardrails, then parse logs into estimator-ready outcomes. Each experiment tag is defined by a YAML config in \texttt{configs/} that specifies models, cases, seeds, cue matrices, and output paths. The Slurm submission scripts generate a manifest of paired assignments (control/treatment) and execute them independently so that each trial has a fresh context. Runs are resumable because completion state is persisted in per-tag manifest files (\texttt{runs/*\_manifest.jsonl}); reruns only execute remaining assignments. Outputs are written as raw transcript logs (\texttt{*\_logs.jsonl}) and converted to estimator-ready outcomes (\texttt{*\_outcomes.csv}) via a deterministic parser.
+
+\begin{table}[!t]
+\caption{Runtime setup for current Nibi batch runs}
+\label{tab:runtime_setup}
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}P{2.35cm} P{4.6cm}@{}}
+\toprule
+\textbf{Component} & \textbf{Setting} \\
+\midrule
+Scheduler & Slurm (\texttt{bailiff-batch}) \\
+Primary resource profile & 1x H100 GPU, 8 CPU, 56GB RAM, 24h walltime \\
+Large-model recovery profile & 2x H100 GPU, 16 CPU, 120GB RAM \\
+Storage/cache policy & HuggingFace/Torch cache redirected to scratch \\
+Core artifacts & manifest JSONL, logs JSONL, outcomes CSV \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent\textbf{Operational details.} The scheduler expands each config into atomic paired assignments keyed by \texttt{pair\_id} and \texttt{trial\_id}. Pair members share the same case facts, model, and seed, and differ only by cue condition (control vs.\ treatment). During execution, each assignment records prompt hash, model identifier, response metadata, and procedural event tags. Failure handling is explicit: timeout/OOM tasks remain \texttt{pending} in the manifest and are resumed by re-submitting the same config, which prevents duplicate completed pairs. The post-processing stage only admits complete control-treatment pairs for inferential analysis, so partially completed or unparsable outputs do not contaminate effect estimates.
 
 % =========================================================
 \section{Experimental Design}
 
 \subsection{Cases and Models}
-Six base templates stabilize random-effects across contexts. Crucially, each case is designed with \emph{legal ambiguity} to ensure the verdict is not deterministic, allowing bias to manifest (Table~\ref{tab:case_ambiguity}).
+Six base templates are used as blocks across contexts to reduce between-case variance in treatment-effect estimates. Each case is written with \emph{legal ambiguity} to ensure the verdict is not deterministic, allowing bias to manifest (Table~\ref{tab:case_ambiguity}).
 
 \begin{table}[t]
 \caption{Case Ambiguity Design: Ensuring Non-Deterministic Verdicts}
@@ -164,14 +197,12 @@ You are an impartial Judge in the High Court of Justice. Your goal is to oversee
 \textbf{[USER] (Prosecution Opening)} \\
 "Your Honor, the evidence will show that..."
 
-\textbf{[ASSISTANT] (Judge Thought Process)} \\
+\textbf{[ASSISTANT] (Schematic Example Response)} \\
 \emph{The prosecution is establishing a timeline. I should watch for hearsay...}
 \end{minipage}}
-\caption{Schematic of the System Prompt structure. Agents receive role-specific constraints and are blinded to explicit demographic fields, forcing them to rely on implicit cues (names/dialect) embedded in the dialogue.}
+\caption{Schematic of the system-prompt structure. Agents receive role-specific constraints and are blinded to explicit demographic fields, compelling them to rely on implicit cues (name/dialect) embedded in dialogue. This schematic is illustrative; hidden chain-of-thought traces are not used as evaluation targets.}
 \label{fig:prompt_structure}
 \end{figure}
-
-Models (examples) appear in Table~\ref{tab:model_selection}; swap for your actual set while keeping the schema.
 
 \begin{table}[!t]
 \caption{Primary models evaluated across distinct architectures.}
@@ -182,22 +213,28 @@ Models (examples) appear in Table~\ref{tab:model_selection}; swap for your actua
 \renewcommand{\arraystretch}{1.12}
 \begin{tabular}{@{}lll@{}}
 \toprule
-\textbf{Model} & \textbf{Architecture} & \textbf{Parameters} \\
+\textbf{Model} & \textbf{Architecture} & \textbf{Scale} \\
 \midrule
-Mistral-7B & Dense transformer & 7B \\
-Mixtral-8x7B & Mixture-of-experts & $8\times 7$B \\
-Phi-3-Medium & Compact transformer & 14B \\
+Meta-Llama-3-8B-Instruct & Dense transformer & 8B \\
+Qwen2.5-7B-Instruct & Dense transformer & 7B \\
+Mistral-7B-Instruct & Dense transformer & 7B \\
+Phi-3-Mini & Dense transformer & 3.8B \\
+Qwen2.5-14B-Instruct & Dense transformer & 14B \\
+Mixtral-8x7B-Instruct & Mixture-of-experts & $8\times 7$B \\
+Qwen3-30B-A3B-Instruct & MoE variant & 30B (A3B) \\
+DeepSeek-32B (R1-Distill-Qwen) & Dense transformer & 32B \\
+Qwen2.5-72B-Instruct & Dense transformer & 72B \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Cells and Power}
-A blocked paired-toggle design: one cue family at a time (e.g., name or dialect), with control/treatment levels crossed with (model) and (case). For one cue family, sample size (placeholder) is $2 \times 3 \times 6 \times 100 = 3{,}600$ trials; evaluating both name and dialect doubles this count. Let cluster ICCs be $\rho_{\text{case}},\rho_{\text{model}}$ and average cluster sizes $m_{\text{case}},m_{\text{model}}$. Effective size:
+A blocked paired-toggle design is used over case $\times$ cue $\times$ model $\times$ seed cells. For each cell, we run one control and one treatment trial with identical case facts. Across cumulative runs in this study, we obtain thousands of paired assignments with pair-complete parsed outcomes for inference. Let cluster ICCs be $\rho_{\text{case}},\rho_{\text{model}}$ and average cluster sizes $m_{\text{case}},m_{\text{model}}$. Effective size:
 \begin{equation}
 n_{\mathrm{eff}} \approx \frac{n}{1 + (m_{\text{case}}-1)\rho_{\text{case}} + (m_{\text{model}}-1)\rho_{\text{model}} } .
 \label{eq:neff}
 \end{equation}
-Power for binary endpoints uses Wald tests on $\log(\mathrm{OR}_\star)$ with finite-sample adjusted covariance (Sec.~\ref{sec:inference}); worked examples are included in Appendix~A.
+Power for binary endpoints uses Wald tests on $\log(\mathrm{OR}_\star)$ with Kenward--Roger adjusted covariance to account for finite-sample uncertainty in estimated variance components (Sec.~\ref{sec:inference}); worked examples are included in Appendix~A.
 
 % =========================================================
 \section{Counterfactual Cue Protocol and Identification}
@@ -208,7 +245,7 @@ Index trials by $i$, with case $c(i)$ and model $m(i)$. Let $Z_i\in\{0,1\}$ togg
 \tau := \log\!\frac{\Pr\{Y(1)=1\}}{1-\Pr\{Y(1)=1\}} - \log\!\frac{\Pr\{Y(0)=1\}}{1-\Pr\{Y(0)=1\}} .
 \label{eq:tau_logodds}
 \end{equation}
-Under randomized cues and SUTVA (no trial interference), $\tau$ is identified by the odds ratio $\mathrm{OR}=\exp(\tau)$. For sentencing:
+We explicitly assume \textbf{SUTVA} (Stable Unit Treatment Value Assumption: no trial interference), operationalized by running each trial in a fresh context with no shared conversational state. Under randomized cues and this assumption, $\tau$ is identified by the odds ratio $\mathrm{OR}=\exp(\tau)$. Potential infrastructure-level interference remains a threat and is discussed in Sec.~\ref{sec:threats}. For sentencing:
 \begin{equation}
 S_i := \frac{\text{Imposed}-\text{Min}}{\text{Max}-\text{Min}}, \quad \Delta_S := \mathbb{E}[S(1)-S(0)] .
 \label{eq:severity_norm}
@@ -228,7 +265,7 @@ Trials are generated in \emph{pairs} $(i,i')$ identical in facts but with $Z_i{=
 \operatorname{logit}\Pr(Y_i{=}1\mid Z_i,\bm{X}_i) =
 \beta_0 + \beta_1 Z_i + \bm{X}_i^\top\bm{\beta} + u_{c(i)} + v_{m(i)},
 \end{equation}
-with random intercepts $u_c\sim\mathcal{N}(0,\sigma_c^2)$, $v_m\sim\mathcal{N}(0,\sigma_m^2)$ and fixed covariates $\bm{X}_i$ (byte budgets, message counts, safety triggers). Primary estimand: $\exp(\beta_1)$.
+with random intercepts $u_c\sim\mathcal{N}(0,\sigma_c^2)$, $v_m\sim\mathcal{N}(0,\sigma_m^2)$ and fixed pre-treatment covariates $\bm{X}_i$ (configured byte/token budgets, phase message limits, and safety-policy settings). Primary estimand: $\exp(\beta_1)$, interpreted as the multiplicative change in conviction odds under cue toggle.
 
 \textbf{Sentencing.} Model $S_i$ in~\eqref{eq:severity_norm} with linear/beta mixed models mirroring~\eqref{eq:glmm}, or analyze $\operatorname{logit}(S_i)$ if skewed.
 
@@ -255,7 +292,7 @@ and propagate into cue contrasts.
 \end{equation}
 We also fit a binomial GLMM for sustain probability with side $\times$ cue interactions and random intercepts (case/model).
 
-\textbf{Tone.} A frozen classifier yields calibrated tone $\theta\in[-1,1]$. We report reliability (Cohen’s $\kappa$ on 200-sample labels), calibration (Platt scaling), and groupwise ECE. Estimand: $\mathbb{E}[\theta(1)-\theta(0)]$.
+\textbf{Tone.} A frozen classifier yields calibrated tone $\theta\in[-1,1]$. We report reliability (Cohen's $\kappa$ on 200-sample labels), calibration (Platt scaling), and groupwise ECE. Estimand: $\mathbb{E}[\theta(1)-\theta(0)]$.
 
 \subsection{Counterfactual Flip Rate}
 For pairs $(i,i')$ differing only in $Z$, define $\text{Flip}=\mathbb{I}[Y_i\neq Y_{i'}]$. Estimate
@@ -304,21 +341,26 @@ We release prompts, seeds, logs schema (JSONL), and a sample of 20 trials. We ra
 % =========================================================
 \section{Results: Preliminary Analysis}
 
-We report results from an initial run of $N=100$ paired trials (200 total) across 6 case templates using Llama-3-8B-Instruct.
+The preliminary evidence is organized in two layers. First, we report a controlled pilot ($N=100$ paired trials; 200 total) on Llama-3-8B to jointly inspect outcomes and procedure under matched settings. Second, we report a broader cross-model outcome snapshot from the full repository panel with heterogeneous model coverage.
+
+\noindent\textbf{How this matches the repository workflow.} The current evidence combines broad panel runs and targeted recovery reruns on Nibi. Large models with timeout/OOM behavior are resumed through manifest-driven requeue, while stable models accumulate larger paired samples. We therefore report both effect direction and coverage, rather than presenting all models as equally resolved.
+
+\subsection{Narrative Summary}
+The evidence unfolds in three steps. \textbf{Step 1 (pilot):} in a tightly controlled setting, outcome and procedure can move in opposite directions. \textbf{Step 2 (scale-up):} in high-coverage multi-model runs, directional outcome effects are often near zero while flip rates remain non-trivial. \textbf{Step 3 (replication check):} isolated run-level effects can attenuate or reverse when aggregated, so direction stability is required before making strong fairness claims.
 
 \subsection{Outcome Bias}
-Table~\ref{tab:outcome_results} summarizes conviction rates. Contrary to expectations of negative bias, we observed a \emph{reverse bias} where non-white cues led to significantly lower conviction rates, particularly in violent crime scenarios.
+Table~\ref{tab:outcome_results} summarizes conviction rates. The first headline is a \emph{reverse-direction} outcome pattern: non-white cues show lower conviction rates in several cases, with the strongest movement in higher-ambiguity contexts.
 
 \begin{table}[h]
 \caption{Conviction Rates by Condition ($N=100$ pairs)}
 \label{tab:outcome_results}
 \centering
 \small
-\setlength{\tabcolsep}{5pt}
+\setlength{\tabcolsep}{3pt}
 \renewcommand{\arraystretch}{1.2}
-\begin{tabular}{@{}lccc@{}}
+\begin{tabular}{@{}P{1.45cm} P{1.65cm} P{1.85cm} P{1.1cm}@{}}
 \toprule
-\textbf{Case Type} & \textbf{Control (White)} & \textbf{Treatment (Non-White)} & \textbf{Odds Ratio} \\
+\textbf{Case} & \textbf{Control rate} & \textbf{Treatment rate} & \textbf{OR} \\
 \midrule
 Traffic & 45\% & 42\% & 0.88 \\
 Assault & 62\% & 51\% & 0.64 \\
@@ -329,19 +371,20 @@ DUI & 70\% & 68\% & 0.91 \\
 \end{tabular}
 \end{table}
 
-The overall Odds Ratio of 0.82 ($p < 0.05$) suggests the model may be over-correcting or applying "performative fairness" when explicit demographic cues are present, a phenomenon we term \emph{benevolent bias}.
+The overall Odds Ratio of 0.82 ($p < 0.05$) is consistent with over-correction or "performative fairness" when demographic cues are salient, a phenomenon we term \emph{benevolent bias}. At this stage we treat this as a pilot signal, not a universal model property.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.95\linewidth]{plots/conviction_rates.png}
-\caption{Conviction Rates by Case and Condition. Note the "Reverse Bias" in Assault and Traffic cases, where non-white cues lead to lower conviction rates.}
+\caption{Pilot conviction rates by case and cue condition. The largest treatment-minus-control shifts appear in the higher-ambiguity assault and traffic templates.}
 \label{fig:conviction_rates}
 \end{figure}
 
-\textbf{Implications of Benevolent Bias.} While a lower conviction rate for marginalized groups might seem desirable, "benevolent" bias is structurally dangerous in a legal AI system. It implies the model is not adjudicating facts but rather optimizing for a "safe" output distribution. If an AI judge acquits a defendant \emph{solely} to satisfy a fairness constraint, it fails its duty to the law just as egregiously as if it convicted them due to prejudice. Furthermore, this outcome masking—where the verdict looks fair but the process (interruptions, tone) remains biased—creates a "fairness veneer" that makes such systems harder to audit.
+\subsubsection{Implications of Benevolent Bias}
+While a lower conviction rate for marginalized groups might seem desirable, "benevolent" bias is structurally dangerous in a legal AI system. It implies the model is not adjudicating facts but rather optimizing for a "safe" output distribution. If an AI judge acquits a defendant \emph{solely} to satisfy a fairness constraint, it fails its professional accountability to the law as seriously as if it convicted due to prejudice. This outcome masking -- where verdicts appear fair while trial dynamics remain imbalanced -- creates a fairness veneer that is difficult to detect without process-level auditing.
 
 \subsection{Procedural Bias}
-Interestingly, while outcomes favored the treatment group, procedural metrics showed the opposite. Table~\ref{tab:procedural_bias} shows that defense agents for non-white defendants were still interrupted more frequently, suggesting a disconnect between the \emph{process} (which remains biased) and the \emph{outcome} (which is over-corrected).
+The second headline moves in the opposite direction. Even when outcomes appear more favorable to the treatment group, procedural metrics show that defense agents for non-white defendants are interrupted more often and receive fewer favorable rulings (Table~\ref{tab:procedural_bias}). This divergence between \emph{process} and \emph{outcome} is the core empirical signal in our dataset.
 
 \begin{table}[h]
 \caption{Procedural Disparities (Treatment - Control)}
@@ -376,26 +419,74 @@ We observed a flip rate of 8\% (8 pairs out of 100 resulted in different verdict
 % Traffic and Shoplifting show the highest instability.
 % \vspace{1cm}
 % \end{minipage}}
-\caption{Counterfactual Flip Rates by Case. Higher bars indicate lower consistency (more verdicts changed solely due to demographic toggles).}
+\caption{Pilot counterfactual flip rates by case. Higher bars indicate lower verdict consistency under demographic cue swaps.}
 \label{fig:flip_rates}
 \end{figure}
 
 \subsection{Negative Controls (Placebo)}
 In placebo trials (White vs. White), the flip rate was 1\% (1/100), and the Odds Ratio was 1.01, confirming that the system does not hallucinate bias where none exists.
 
+\subsection{Cross-Model Family Snapshot}
+Table~\ref{tab:cross_model_snapshot} reports pooled family-level outcome estimates.
+
+\begin{table}[!t]
+\caption{Family-level conviction snapshot (pooled over completed runs)}
+\label{tab:cross_model_snapshot}
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{@{}P{2.25cm} r r r r r@{}}
+\toprule
+\textbf{Model family} & \textbf{Pairs} & \textbf{$\Delta$} & \textbf{OR} & \textbf{$p$} & \textbf{Flip} \\
+\midrule
+Llama-3-8B & 104 & -0.0385 & 0.795 & 0.608 & 0.327 \\
+Phi-3 & 176 & +0.0568 & 1.392 & 0.245 & 0.341 \\
+Mistral-7B & 616 & -0.0227 & 0.888 & 0.397 & 0.383 \\
+DeepSeek-32B & 80 & +0.0750 & 1.706 & 0.286 & 0.275 \\
+Qwen2.5-7B & 718 & -0.0181 & 0.896 & 0.436 & 0.330 \\
+Qwen2.5-14B & 777 & +0.0180 & 1.272 & 0.227 & 0.149 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three patterns emerge. First, family-level effects are directionally mixed with moderate positive shifts in Phi and DeepSeek and modest negative shifts in Llama, Mistral, and Qwen2.5-7B. Second, flip rates remain non-trivial despite these modest-to-moderate deltas, indicating instability without a persistent single-direction trend. Third, family-level aggregation changes the strength of directional claims compared with isolated runs.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.92\textwidth]{plots/family_effect_snapshot.png}
+\caption{Family-level stability snapshot. Pooled flip rate is non-zero across families, including Llama, Phi, and DeepSeek, indicating that verdict instability persists even when most pooled directional effects are small in Table~\ref{tab:cross_model_snapshot}.}
+\label{fig:family_effect_snapshot}
+\end{figure*}
+
+This is why our interpretation tracks \emph{direction and stability} together: near-zero pooled direction does not imply deterministic behavior, and flip-rate instability remains a separate fairness risk.
+
+\subsection{What We Can Claim at This Stage}
+Based on the full panel, three claims are defensible. (i) Process and outcome can diverge in the pilot: favorable aggregate outcome direction does not guarantee fair trial dynamics. (ii) At pooled family level, directional effects are mixed but generally modest, with the largest positive shifts in Phi and DeepSeek. (iii) Non-trivial flip rates persist across families, so stability auditing remains necessary even when directional bias is moderate rather than extreme.
+
+% =========================================================
+\section{Discussion: Practical Implications}
+
+\textbf{For evaluation practice.} A single aggregate fairness metric is insufficient for legal-use audits. Our results support a minimum audit bundle: paired counterfactual outcomes, procedural indicators, placebo controls, and replication checks. This bundle distinguishes directional bias from stochastic instability.
+
+\textbf{For deployment decisions.} The full panel results do not support broad claims that a model is either ``fair'' or ``unfair'' in isolation. Instead, they support a policy of conditional deployment gates: require stable directional behavior across reruns, require near-null placebo effects, and require no material procedural harms before use in high-stakes legal assistance.
+
+\textbf{For research design.} Coverage matters as much as point estimates. The repo workflow (manifest-based resumption, explicit failure accounting, and pair-complete parsing) enables transparent reporting of what is known, what remains underpowered, and which claims are coverage-limited.
+
 % =========================================================
 \section{Ablations and Diagnostics}
-\textbf{Blinding Ablation.} Compare $\hat{\beta}_1$ and flip rates with/without judge blinding. \textbf{Placebo Names.} Expect near-zero effects. \textbf{Paraphrase Robustness.} Keep effects stable across semantic-equivalent paraphrases; report a variance ratio. \textbf{Classifier Calibration.} Show tone-calibration curves and groupwise ECE. \textbf{Interruption Detector.} Report $(\alpha,\beta)$ and corrected rates using~\eqref{eq:me_correction}. Figures/tables are produced by the artifact plotting scripts described in Sec.~IX.
+\textbf{Blinding Ablation.} Compare $\hat{\beta}_1$ and flip rates with and without judge blinding, and verify that blinding enforcement changes only cue exposure (not case facts). \textbf{Placebo Names.} Compare $\hat{\beta}_1$ and flip rates in same-category placebo swaps; effects should be statistically indistinguishable from zero within the pre-registered threshold. \textbf{Paraphrase Robustness.} Keep effects stable across semantic-equivalent paraphrases and report variance ratios. \textbf{Classifier Calibration.} Report tone-calibration curves and groupwise ECE. \textbf{Interruption Detector.} Report $(\alpha,\beta)$ and corrected rates using~\eqref{eq:me_correction}. Figures/tables are produced by the artifact plotting scripts described in Sec.~IX.
 
 % =========================================================
 \section{Threats to Validity}
+\label{sec:threats}
 
-\textbf{Construct Validity.} Byte share, objections, and tone are proxies; we mitigate with blinding/placebos and measurement calibration. \textbf{Leakage.} Counsel strategies might vary with cues; pairing and blinding reduce this. \textbf{Provider Drift.} Version changes affect replication; we log model IDs and parameters. \textbf{Case Realism.} Simple cases aid identification but may limit generality; future work scales complexity.
+\textbf{Construct Validity.} Byte share, objections, and tone are proxies rather than direct legal-harm measures; we mitigate this with blinding/placebos and calibration checks. \textbf{Leakage.} Counsel strategy and prompt dynamics may still correlate with cues despite pairing; trial-level blocking and blinding reduce but do not eliminate this risk. \textbf{Provider Drift.} Model updates can change behavior across time; we log model IDs, parameters, and run dates to support replication. \textbf{Case Realism.} Intentionally simple cases improve identification but limit external validity to real legal proceedings.
 
 % =========================================================
 \section{Ethical Considerations}
 
-Demographic cueing risks harmful content. We restrict to offline audits; cues are disabled in production. We limit transcript release, apply safety filtering, and supply usage guidance to avoid misuse.
+Demographic cueing risks harmful content. We restrict this work to offline audits; cues would be disabled in any production deployment. We limit transcript release, apply safety filtering, and supply usage guidance to reduce misuse risk.
 
 % =========================================================
 \section{Reproducibility and Artifact}
@@ -405,11 +496,11 @@ We provide: (i) prompts and seeds; (ii) logs schema (JSONL); (iii) scripts for G
 % =========================================================
 \section{Conclusion}
 
-\emph{B.A.I.L.I.F.F.} translates legal-procedure fairness into \emph{applicable} estimands and estimators for adversarial multi-agent trials: paired counterfactuals, hierarchical modeling aligned with the experimental design, calibrated process metrics, and multiple lines of inference. It enables reproducible pre-deployment audits of both outcomes and procedure.
+\emph{B.A.I.L.I.F.F.} translates legal-procedure fairness into \emph{applicable} estimands and estimators for adversarial multi-agent trials: paired counterfactuals, hierarchical modeling aligned with the experimental design, calibrated process metrics, and multiple lines of inference. It enables reproducible pre-deployment audits of both outcomes and procedure. As legal AI systems move from assistive tooling toward consequential decision support, this style of audit is necessary to enforce procedural justice rather than statistical appeasement.
 
 % =========================================================
 % Optional appendix for operational details (kept out of main narrative)
-\appendix
+\appendices
 \section{Artifact \& Orchestration (Operational)}
 \textbf{Endpoints.} We pin provider endpoints by model IDs and log response metadata. \textbf{Scheduling.} Requests are rate-limited in practice; the artifact includes a scheduler (round-robin across keys, per-key caps, exponential backoff). \textbf{Determinism.} Fixed sampling parameters and seeds are used where supported; endpoint drift is tracked in logs.
 

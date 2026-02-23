@@ -1,0 +1,38 @@
+%%{init: {'theme':'base', 'flowchart': {'htmlLabels': true, 'nodeSpacing': 45, 'rankSpacing': 50}}}%%
+flowchart LR
+  classDef source fill:#eef6ff,stroke:#1d4ed8,stroke-width:1px,color:#0f172a
+  classDef engine fill:#f0fdf4,stroke:#15803d,stroke-width:1px,color:#0f172a
+  classDef data fill:#fff7ed,stroke:#c2410c,stroke-width:1px,color:#0f172a
+
+  subgraph Design["Design Layer"]
+    C["Case templates<br/>(6 legal domains)"]:::source
+    Q["Cue matrix<br/>(name, dialect, placebo)"]:::source
+    S["Seed schedule<br/>(blocked randomization)"]:::source
+    C --> S
+    Q --> S
+  end
+
+  subgraph Exec["Execution Layer"]
+    M["Manifest builder<br/>(pair_id, case_id, model, seed,<br/>cue_condition)"]:::engine
+    O["Trial orchestrator<br/>(state machine, role guards,<br/>byte/token budgets, retries)"]:::engine
+    J["Judge agent"]:::engine
+    P["Prosecution agent"]:::engine
+    D["Defense agent"]:::engine
+    M --> O
+    O --> J
+    O --> P
+    O --> D
+    J --> O
+    P --> O
+    D --> O
+  end
+
+  subgraph Data["Data + Inference Layer"]
+    L["Structured logs JSONL<br/>(utterance events + metadata)"]:::data
+    R["Outcome extraction<br/>(paired rows, verdict_bin,<br/>procedural metrics)"]:::data
+    T["Inference stack<br/>(McNemar, GLMM, KR CI,<br/>bootstrap, RI)"]:::data
+    L --> R --> T
+  end
+
+  S --> M
+  O --> L

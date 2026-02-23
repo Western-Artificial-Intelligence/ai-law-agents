@@ -30,6 +30,15 @@ fi
 if [ -n "${SBATCH_GRES:-}" ]; then
   SBATCH_ARGS+=(--gres="${SBATCH_GRES}")
 fi
+if [ -n "${SBATCH_EXCLUDE:-}" ]; then
+  SBATCH_ARGS+=(--exclude="${SBATCH_EXCLUDE}")
+fi
+if [ -n "${SBATCH_CONSTRAINT:-}" ]; then
+  SBATCH_ARGS+=(--constraint="${SBATCH_CONSTRAINT}")
+fi
+if [ -n "${SBATCH_QOS:-}" ]; then
+  SBATCH_ARGS+=(--qos="${SBATCH_QOS}")
+fi
 
 JOB_ID="$(sbatch "${SBATCH_ARGS[@]}" scripts/run_fir_experiments.sbatch | awk '{print $4}')"
 echo "Submitted job: $JOB_ID"

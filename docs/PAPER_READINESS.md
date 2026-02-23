@@ -33,7 +33,7 @@ This file maps manuscript claims to executable artifacts in this repository.
 
 ## Manuscript alignment updates already made
 
-- Removed `PLACEHOLDER` markers in `paper.tex`.
+- Removed `PLACEHOLDER` markers in `paper/paper.tex`.
 - Replaced unresolved artifact placeholders with reproducible artifact wording.
 - Kept analysis language consistent with implemented finite-sample methods.
 
